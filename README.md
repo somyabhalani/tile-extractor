@@ -42,9 +42,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Run Locally
-
 Start the local server using Uvicorn:
-
 ```bash
 uvicorn app:app --reload
 ```
