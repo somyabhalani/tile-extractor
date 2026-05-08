@@ -43,7 +43,7 @@ pip install -r requirements.txt
 
 ### 3. Run Locally
 
-now , from downloaded repo open terminal and
+
 Start the local server using Uvicorn:
 
 ```bash
