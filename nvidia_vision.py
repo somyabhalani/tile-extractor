@@ -11,63 +11,54 @@ INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL = "meta/llama-3.2-11b-vision-instruct"
 
 
-def _build_prompt(image_boxes: list, text_blocks: list) -> str:
-    """Build a structured prompt for the vision model to scan the full page."""
-
+def _build_prompt_visual(image_boxes: list) -> str:
+    """
+    Build a prompt that tells the model to visually read ALL text on the page
+    itself — no pre-extracted text needed. Works even for rasterized PDFs.
+    """
     img_list = "\n".join([
-        f"  - Tile #{i+1}: xref={b['xref']}, region=[x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
+        f"  - Tile #{i+1}: xref={b['xref']}, pixel region [x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
         for i, b in enumerate(image_boxes)
     ])
 
-    txt_list = "\n".join([
-        f"  - \"{b['text'].replace(chr(10), ' ').strip()}\" at [x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
-        for i, b in enumerate(text_blocks)
-    ])
+    prompt = f"""You are an expert at reading tile and flooring product catalogues.
 
-    prompt = f"""You are an expert at reading tile/flooring product catalogue pages.
+I am giving you a full-page image from a PDF tile catalogue. The page contains tile product photos and product text labels (names, sizes, finishes, codes, etc.).
 
-I am giving you the FULL PAGE image of one page from a PDF catalogue. Your job is to scan the ENTIRE PAGE — every corner, every label, every number — and figure out which product text belongs to which tile image.
-
-TILE IMAGES FOUND ON THIS PAGE (with their pixel coordinates on the page):
+TILE IMAGES I have detected on this page (with their pixel bounding boxes):
 {img_list if img_list else "  (none found)"}
 
-ALL TEXT FOUND ON THIS PAGE (extracted from the PDF, with coordinates):
-{txt_list if txt_list else "  (none found)"}
+YOUR TASK:
+1. Look carefully at the ENTIRE page image — read ALL visible text on the page.
+2. For EACH tile listed above, extract the EXACT text block(s) that correspond to it. This includes:
+   - Product / collection name
+   - Tile size / dimensions (e.g. 600x1200, 800x800 mm)
+   - Surface finish (e.g. Polished, Matt, Satin, Glazed, Natural)
+   - Texture or look (e.g. Marble, Stone, Wood, Concrete)
+   - Product code / SKU
+   - Any technical spec, shade, or grade visible near that tile
+3. CRITICAL: Only match text to a tile if it clearly describes THAT specific tile based on visual layout (e.g., text is directly underneath, inside the same grid cell, or explicitly labels the tile). Do NOT mix up text from adjacent tiles.
+4. Text that is a general page header, brand logo, or page number should be ignored.
+5. If a tile has no readable text specifically belonging to it, return an empty string for that tile.
 
-INSTRUCTIONS:
-1. Look at the FULL PAGE image carefully — not just the area immediately around each tile.
-2. For each tile listed above, collect ALL related text from anywhere on the page that describes that tile. This includes:
-   - Product name or collection name
-   - Size / dimensions (e.g. 600x1200, 800x800)
-   - Finish type (e.g. Polished, Matt, Satin, Glazed)
-   - Surface texture or look (e.g. Marble, Wood, Concrete)
-   - SKU code or product code
-   - Any price, grade, or technical spec nearby
-3. A piece of text "belongs" to a tile if it is: 
-   - Visually closest to that tile on the page
-   - OR clearly labeling/captioning that tile (above, below, beside it)
-   - OR in a panel/section that is dedicated to that tile
-4. If a text block appears to be a page header, footer, or irrelevant (like brand name, page number), skip it.
-5. If a tile truly has no associated text on the page, return an empty string.
+IMPORTANT: Even if the text appears to be part of the background image (not selectable), READ IT VISUALLY from the image I am providing.
 
-Return ONLY a valid JSON object in this exact format, nothing else:
+Return ONLY valid JSON in this exact format, nothing else — no markdown, no explanation:
 {{
   "associations": [
     {{
-      "xref": <xref number as integer>,
-      "text": "<all collected product text for this tile, separated by | character>"
+      "xref": <xref integer>,
+      "text": "<all product text for this SPECIFIC tile ONLY, use | to separate multiple items. Do NOT include text from other tiles.>"
     }}
   ]
-}}
-
-IMPORTANT: Output ONLY the JSON. No explanation, no markdown, no code block. Just the raw JSON.
-"""
+}}"""
     return prompt
 
 
 def associate_text_to_tiles(image_b64: str, image_boxes: list, text_blocks: list) -> dict:
     """
-    Call NVIDIA NIM vision model to associate text to each tile image.
+    Call NVIDIA NIM vision model to visually read text from the full page image
+    and associate it with each tile. Does NOT rely on pre-extracted text blocks.
     Returns a dict: { xref: "matched text" }
     """
     if not NVIDIA_API_KEY:
@@ -76,11 +67,8 @@ def associate_text_to_tiles(image_b64: str, image_boxes: list, text_blocks: list
     if not image_boxes:
         return {}
 
-    # If no text blocks, no point calling the API
-    if not text_blocks:
-        return {b["xref"]: "" for b in image_boxes}
-
-    prompt = _build_prompt(image_boxes, text_blocks)
+    # Always call the vision model — let it visually read text from the image
+    prompt = _build_prompt_visual(image_boxes)
 
     headers = {
         "Authorization": f"Bearer {NVIDIA_API_KEY}",
@@ -94,45 +82,94 @@ def associate_text_to_tiles(image_b64: str, image_boxes: list, text_blocks: list
                 "role": "user",
                 "content": [
                     {
-                        "type": "text",
-                        "text": prompt
-                    },
-                    {
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/png;base64,{image_b64}"
                         }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
                     }
                 ]
             }
         ],
         "max_tokens": 1024,
-        "temperature": 0.10,   # Low temp = more consistent structured output
+        "temperature": 0.10,
         "top_p": 0.90,
         "stream": False
     }
 
     try:
+        print(f"INFO: Calling NVIDIA API for {len(image_boxes)} tiles...")
         response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
-        
+
         result = response.json()
         raw_content = result["choices"][0]["message"]["content"]
-        
-        # Extract JSON from the model response (model may add extra text)
-        json_match = re.search(r'\{.*\}', raw_content, re.DOTALL)
-        if not json_match:
-            print(f"WARNING: Could not find JSON in model response: {raw_content[:200]}")
-            return {b["xref"]: "" for b in image_boxes}
-        
-        parsed = json.loads(json_match.group())
-        associations = parsed.get("associations", [])
-        
-        # Build final dict: { xref -> text }
+        print(f"INFO: NVIDIA raw response: {raw_content[:600]}")
+
+        # --- Try JSON parse first ---
+        json_match = re.search(r'\{[\s\S]*\}', raw_content)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                associations = parsed.get("associations", [])
+                result_map = {}
+                for item in associations:
+                    result_map[int(item["xref"])] = item.get("text", "").strip()
+                if result_map:
+                    print(f"INFO: Got {len(result_map)} associations via JSON")
+                    return result_map
+            except json.JSONDecodeError:
+                pass
+
+        # --- Fallback: parse the model's markdown/text response ---
+        # Model often returns "Tile 1: Name\n* Size: ...\n* Finish: ..."
+        # We map Tile #N back to the xref by index (same order we sent them)
+        print("INFO: JSON parse failed, trying markdown fallback parser...")
         result_map = {}
-        for item in associations:
-            result_map[int(item["xref"])] = item.get("text", "").strip()
-        
+
+        # Split by tile sections: "Tile 1", "Tile 2" etc.
+        tile_sections = re.split(r'\*{0,2}Tile\s*#?\s*(\d+)\s*[:\-]?\*{0,2}', raw_content, flags=re.IGNORECASE)
+
+        # tile_sections will be: [pre-text, "1", content1, "2", content2, ...]
+        i = 1
+        while i < len(tile_sections) - 1:
+            tile_num_str = tile_sections[i].strip()
+            tile_content = tile_sections[i + 1].strip() if i + 1 < len(tile_sections) else ""
+
+            try:
+                tile_num = int(tile_num_str)  # 1-indexed
+                xref_index = tile_num - 1
+                if 0 <= xref_index < len(image_boxes):
+                    xref = image_boxes[xref_index]["xref"]
+
+                    # Extract meaningful lines (strip markdown bullets and bold)
+                    lines = []
+                    for line in tile_content.split('\n'):
+                        line = line.strip()
+                        line = re.sub(r'^\*+\s*', '', line)          # remove leading *
+                        line = re.sub(r'\*\*([^*]+)\*\*', r'\1', line)  # remove **bold**
+                        line = re.sub(r'\*([^*]+)\*', r'\1', line)      # remove *italic*
+                        # Only keep lines that have actual content (not "Not visible" etc.)
+                        if line and ':' in line:
+                            key, _, val = line.partition(':')
+                            val = val.strip()
+                            if val and val.lower() not in ('not visible', 'n/a', 'not available', 'unknown', ''):
+                                lines.append(f"{key.strip()}: {val}")
+                        elif line and len(line) > 2 and 'not visible' not in line.lower():
+                            lines.append(line)
+
+                    # Take first 5 meaningful lines max
+                    text = " | ".join(lines[:5])
+                    if text:
+                        result_map[xref] = text
+            except (ValueError, IndexError):
+                pass
+            i += 2
+
+        print(f"INFO: Got {len(result_map)} associations via markdown fallback")
         return result_map
 
     except requests.exceptions.Timeout:

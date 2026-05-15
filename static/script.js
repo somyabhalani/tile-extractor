@@ -23,6 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const lbProductWrap = document.getElementById('lb-product-wrap');
     const lbProductText = document.getElementById('lb-product-text');
 
+    // Text Info Modal Elements
+    const textModal = document.getElementById('text-modal');
+    const closeTextModal = document.getElementById('close-text-modal');
+    const textModalTitle = document.getElementById('text-modal-title');
+    const textModalContent = document.getElementById('text-modal-content');
+
     let currentJobId = null;
     // Store scanned text per page: { pageNum: { xref: "text" } }
     let scannedTextData = {};
@@ -134,14 +140,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const group = document.createElement('div');
             group.className = 'page-group';
 
-            // Page header with scan button
+            // Page header with scan button and container for info button
             const header = document.createElement('div');
             header.className = 'page-header';
             header.innerHTML = `
                 <div class="page-number">Page ${pageData.page}</div>
-                <button class="btn-scan-text" data-page="${pageData.page}" data-job="${jobId}">
-                    <i class="fa-solid fa-magnifying-glass"></i> Scan Text
-                </button>
+                <div class="page-actions" id="page-actions-${pageData.page}">
+                    <button class="btn-scan-text" data-page="${pageData.page}" data-job="${jobId}">
+                        <i class="fa-solid fa-magnifying-glass"></i> Scan Text
+                    </button>
+                </div>
             `;
             group.appendChild(header);
 
@@ -209,6 +217,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             btn.innerHTML = '<i class="fa-solid fa-check"></i> Scanned';
             btn.classList.add('btn-scan-done');
+
+            // Add "Text Info" button
+            const actionsContainer = document.getElementById(`page-actions-${page}`);
+            if (actionsContainer && !document.getElementById(`btn-text-info-${page}`)) {
+                const infoBtn = document.createElement('button');
+                infoBtn.id = `btn-text-info-${page}`;
+                infoBtn.className = 'btn-text-info';
+                infoBtn.innerHTML = '<i class="fa-solid fa-list"></i> Page Text Info';
+                infoBtn.addEventListener('click', () => openPageTextModal(page));
+                actionsContainer.appendChild(infoBtn);
+            }
+
         } catch (err) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Retry';
@@ -242,8 +262,46 @@ document.addEventListener('DOMContentLoaded', () => {
         lightbox.classList.add('active');
     }
 
+    // --- Page Text Modal ---
+    function openPageTextModal(page) {
+        const textData = scannedTextData[page];
+        textModalTitle.textContent = `Page ${page} - Extracted Product Text`;
+        
+        if (!textData || Object.keys(textData).length === 0) {
+            textModalContent.innerHTML = "<em>No text was found or matched to tiles on this page.</em>";
+        } else {
+            let htmlContent = "";
+            for (const [xref, text] of Object.entries(textData)) {
+                if (text) {
+                    // Split the text by the | delimiter and format nicely
+                    const lines = text.split('|').map(l => l.trim()).filter(l => l);
+                    let formattedText = lines.map(l => `• ${l}`).join('<br>');
+                    
+                    htmlContent += `
+                        <div style="margin-bottom: 1.5rem; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <h4 style="margin: 0 0 0.5rem 0; color: #fcd34d;">Tile Image Reference: ${xref}</h4>
+                            <div style="padding-left: 0.5rem;">${formattedText}</div>
+                        </div>
+                    `;
+                }
+            }
+            if (!htmlContent) {
+                 htmlContent = "<em>No text was matched for the tiles on this page.</em>";
+            }
+            textModalContent.innerHTML = htmlContent;
+        }
+        
+        textModal.classList.add('active');
+    }
+
+    // Modal Close Handlers
     closeBtn.addEventListener('click', () => lightbox.classList.remove('active'));
     lightbox.addEventListener('click', (e) => {
         if (e.target === lightbox) lightbox.classList.remove('active');
+    });
+
+    closeTextModal.addEventListener('click', () => textModal.classList.remove('active'));
+    textModal.addEventListener('click', (e) => {
+        if (e.target === textModal) textModal.classList.remove('active');
     });
 });

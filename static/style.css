@@ -255,6 +255,12 @@ header p.subtitle {
     margin-bottom: 1.2rem;
 }
 
+.page-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 .page-number {
     font-size: 0.85rem;
     font-weight: 700;
@@ -263,25 +269,42 @@ header p.subtitle {
     color: var(--text-muted);
 }
 
-.btn-scan-text {
+.btn-scan-text, .btn-text-info {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.45rem 1rem;
     font-size: 0.85rem;
     font-weight: 600;
-    background: rgba(212, 175, 55, 0.1);
-    color: var(--primary);
-    border: 1px solid rgba(212, 175, 55, 0.4);
     border-radius: 20px;
     cursor: pointer;
     transition: all 0.3s ease;
 }
 
+.btn-scan-text {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--primary);
+    border: 1px solid rgba(212, 175, 55, 0.4);
+}
+
+.btn-text-info {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-scan-text:hover:not(:disabled), .btn-text-info:hover {
+    transform: translateY(-1px);
+}
+
 .btn-scan-text:hover:not(:disabled) {
     background: rgba(212, 175, 55, 0.25);
     border-color: var(--primary);
-    transform: translateY(-1px);
+}
+
+.btn-text-info:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: var(--text-color);
 }
 
 .btn-scan-text:disabled {
