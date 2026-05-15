@@ -5,3 +5,7 @@ PyMuPDF
 Pillow
 python-dotenv
 requests
+easyocr
+torch
+torchvision
+torchaudio

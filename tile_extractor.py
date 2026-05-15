@@ -101,17 +101,21 @@ class TileCatalogueExtractor:
 
     def match_text_locally(self, page_num: int):
         """
-        Extract text for tiles LOCALLY by finding the closest text blocks in the PDF data.
-        This is faster, 100% accurate for vector PDFs, and free.
+        Extract text for tiles using Local OCR (EasyOCR).
+        This works on ANY PDF (Scanned or Digital) and runs 100% locally.
         """
-        import math
+        import easyocr
+        import numpy as np
+        
+        # Initialize reader (singleton-style to save memory/time)
+        if not hasattr(self, '_ocr_reader'):
+            print("INFO: Initializing Local OCR Engine (EasyOCR)...")
+            self._ocr_reader = easyocr.Reader(['en'], gpu=False) # Use CPU to ensure it works everywhere
+        
         doc = fitz.open(self.pdf_path)
         page = doc[page_num - 1]
         
-        # Get all text blocks on the page: (x0, y0, x1, y1, "text", block_no, block_type)
-        blocks = page.get_text("blocks")
-        
-        # Get all image info on the page
+        # Get all image xrefs and their rectangles on the page
         images = page.get_images(full=True)
         results = {}
 
@@ -121,41 +125,29 @@ class TileCatalogueExtractor:
             if not rects:
                 continue
             
-            img_rect = rects[0]
-            img_center_x = (img_rect.x0 + img_rect.x1) / 2
-            img_center_y = (img_rect.y0 + img_rect.y1) / 2
+            # Create a crop around the image to find its text label
+            rect = rects[0]
+            padding = 150 # Large padding to ensure we grab the text
+            padded_rect = fitz.Rect(
+                max(0, rect.x0 - padding),
+                max(0, rect.y0 - padding),
+                min(page.rect.width, rect.x1 + padding),
+                min(page.rect.height, rect.y1 + padding)
+            )
             
-            # Find the best text block for this image
-            best_block_text = ""
-            min_dist = float('inf')
+            # Render the crop at 2x resolution for better OCR
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), clip=padded_rect)
+            img_bytes = pix.tobytes("png")
             
-            for b in blocks:
-                b_rect = fitz.Rect(b[:4])
-                b_text = b[4].strip()
-                
-                if not b_text or len(b_text) < 2:
-                    continue
-                
-                # Calculate distance from image center to block center
-                b_center_x = (b_rect.x0 + b_rect.x1) / 2
-                b_center_y = (b_rect.y0 + b_rect.y1) / 2
-                
-                dist = math.sqrt((img_center_x - b_center_x)**2 + (img_center_y - b_center_y)**2)
-                
-                # Prioritize blocks BELOW the image (common in tile catalogs)
-                # If block is below, give it a "distance bonus"
-                if b_rect.y0 > img_rect.y1:
-                    dist *= 0.5 
-                
-                # If it's within a reasonable range (e.g. 300 points)
-                if dist < 400 and dist < min_dist:
-                    min_dist = dist
-                    best_block_text = b_text
-
-            if best_block_text:
-                # Clean and format the text
-                cleaned = best_block_text.replace('\n', ' | ')
-                results[xref] = cleaned
+            # Run OCR on the crop
+            try:
+                ocr_results = self._ocr_reader.readtext(img_bytes, detail=0)
+                # Filter out garbage or very short strings
+                cleaned_text = " | ".join([t.strip() for t in ocr_results if len(t.strip()) > 2])
+                results[xref] = cleaned_text
+            except Exception as e:
+                print(f"ERROR: OCR failed for xref {xref}: {e}")
+                results[xref] = ""
 
         doc.close()
         return results
