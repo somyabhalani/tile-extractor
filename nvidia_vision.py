@@ -18,8 +18,9 @@ def _scan_single_tile(tile_box: dict, headers: dict) -> dict:
         return {"xref": tile_box["xref"], "text": ""}
         
     prompt = """You are a strict data extraction robot.
-Look at the provided image crop of a tile and its text label.
-Extract the product details.
+I am giving you an image crop of a tile catalogue.
+Focus on the CENTRAL tile in the image and extract its product details. 
+Ignore text that clearly belongs to other tiles visible at the edges of the crop.
 
 CRITICAL RULES:
 1. NEVER use conversational language. DO NOT say "The image shows" or "Based on the image".
