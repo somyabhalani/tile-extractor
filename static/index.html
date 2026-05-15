@@ -117,9 +117,11 @@
     <!-- Page Text Modal -->
     <div id="text-modal" class="lightbox">
         <span class="close-btn" id="close-text-modal">&times;</span>
-        <div class="lightbox-content" style="max-width: 600px; width: 90%; padding: 1.5rem; background: var(--bg-color); border-radius: 12px; max-height: 80vh; overflow-y: auto; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <h2 id="text-modal-title" style="margin-top:0; color: var(--primary); border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; font-size: 1.25rem;">Page Text Info</h2>
-            <div id="text-modal-content" style="white-space: pre-wrap; margin-top: 0.5rem; line-height: 1.4; color: var(--text-color); font-size: 0.9rem;"></div>
+        <div class="text-modal-container glass-panel">
+            <h2 id="text-modal-title">Page Text Info</h2>
+            <div id="text-modal-scroll-area">
+                <div id="text-modal-content"></div>
+            </div>
         </div>
     </div>
 
