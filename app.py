@@ -16,6 +16,7 @@ if sys.stdout is not None:
 load_dotenv()
 
 from tile_extractor import TileCatalogueExtractor
+from nvidia_vision import scan_full_page_products
 
 app = FastAPI(title="Tile Extractor API")
 
@@ -161,80 +162,55 @@ async def download_page_assets(job_id: str, page_num: int):
 
 @app.post("/api/scan-text/{job_id}/{page_num}")
 async def scan_text_for_page(job_id: str, page_num: int):
-    """Use NVIDIA vision model to associate text to tiles on a specific page."""
+    """Scan the entire page as one image and extract all product details using 90B model."""
     job_dir = JOBS_DIR / job_id
     csv_path = job_dir / "output" / "tiles.csv"
 
     if not csv_path.exists():
         raise HTTPException(status_code=404, detail="Job results not found.")
 
-    # Find the PDF for this job
     pdf_files = list(job_dir.glob("*.pdf"))
     if not pdf_files:
-        raise HTTPException(status_code=404, detail="PDF not found for this job.")
+        raise HTTPException(status_code=404, detail="PDF not found.")
     pdf_path = str(pdf_files[0])
 
     try:
-        # Step 1: Extract page layout (images, text, rendered PNG)
-        extractor = TileCatalogueExtractor(
-            pdf_path=pdf_path,
-            output_dir=str(job_dir / "output"),
-            verbose=False
-        )
-        layout = extractor.extract_page_layout(page_num)
+        extractor = TileCatalogueExtractor(pdf_path=pdf_path, output_dir=str(job_dir / "output"))
+        
+        # Step 1: Render FULL page at high-res (3x zoom)
+        image_b64 = extractor.get_full_page_image(page_num)
 
-        if not layout["image_boxes"]:
-            return {"page": page_num, "status": "no_images", "associations": {}}
+        # Step 2: Use 90B to extract all products from the page
+        full_text_results = scan_full_page_products(image_b64)
 
-        # Step 2: Extract text LOCALLY (Faster, Free, and 100% accurate for vector PDFs)
-        associations = extractor.match_text_locally(page_num)
-
-        # Step 3: Update tiles.csv with the matched text
+        # Step 3: Update CSV (Assign this info to all tiles on this page for now, as context)
         rows = []
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             fieldnames = reader.fieldnames or []
             rows = list(reader)
 
-        # Add product_text column if not already present
         if "product_text" not in fieldnames:
             fieldnames = list(fieldnames) + ["product_text"]
 
         for row in rows:
             if int(row.get("page", 0)) == page_num:
-                # Extract xref from filename: tile_p0001_600x1200_123.jpg → xref=123
-                fname = row.get("filename", "")
-                parts = fname.rsplit("_", 1)
-                if len(parts) == 2:
-                    xref_part = parts[1].split(".")[0]
-                    try:
-                        xref = int(xref_part)
-                        row["product_text"] = associations.get(xref, "")
-                    except ValueError:
-                        row["product_text"] = row.get("product_text", "")
-                else:
-                    row["product_text"] = row.get("product_text", "")
+                row["product_text"] = full_text_results
 
-        # Write updated CSV back
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
 
-        print(f"INFO: Text scan complete for job {job_id} page {page_num} — {len(associations)} associations")
         return {
             "page": page_num,
             "status": "success",
-            "associations": {str(k): v for k, v in associations.items()}
+            "full_text": full_text_results
         }
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        print(f"ERROR: scan-text failed for job {job_id} page {page_num}: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+        print(f"ERROR: scan-text failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

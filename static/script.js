@@ -200,18 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
-            // Store scanned text data
-            scannedTextData[page] = data.associations || {};
+            // Store scanned text data (now the full page summary)
+            scannedTextData[page] = data.full_text || "";
 
-            // Update tile cards on this page with a small text indicator
+            // Update all tile cards on this page to show that text is available
             document.querySelectorAll(`.tile-card[data-page="${page}"]`).forEach(card => {
-                const xref = card.dataset.xref;
-                const text = scannedTextData[page][xref];
-                if (text) {
-                    const overlay = card.querySelector('.tile-overlay');
-                    if (overlay) {
-                        overlay.innerHTML += `<p class="tile-text-tag"><i class="fa-solid fa-tag"></i> Text found</p>`;
-                    }
+                const overlay = card.querySelector('.tile-overlay');
+                if (overlay && !overlay.querySelector('.tile-text-tag')) {
+                    overlay.innerHTML += `<p class="tile-text-tag"><i class="fa-solid fa-tag"></i> Details Extracted</p>`;
                 }
             });
 
@@ -257,13 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
         lbDownload.href = `/api/images/${jobId}/${img.filename}`;
         lbDownload.setAttribute('download', img.filename);
 
-        // Show product text if scanned
-        const xref = cardEl ? cardEl.dataset.xref : null;
+        // Show page-level product info in lightbox
         const page = img.page;
-        const text = scannedTextData[page] && xref ? scannedTextData[page][xref] : null;
+        const text = scannedTextData[page];
 
         if (text) {
-            lbProductText.textContent = text;
+            lbProductText.innerHTML = text.replace(/\n/g, '<br>');
             lbProductWrap.style.display = 'flex';
         } else {
             lbProductWrap.style.display = 'none';
@@ -274,31 +269,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Page Text Modal ---
     function openPageTextModal(page) {
-        const textData = scannedTextData[page];
-        textModalTitle.textContent = `Page ${page} - Extracted Product Text`;
+        const text = scannedTextData[page];
+        textModalTitle.textContent = `Page ${page} - Extracted Product Info`;
         
-        if (!textData || Object.keys(textData).length === 0) {
-            textModalContent.innerHTML = "<em>No text was found or matched to tiles on this page.</em>";
+        if (!text) {
+            textModalContent.innerHTML = "<em>No product information extracted for this page yet. Click 'Scan Text' first.</em>";
         } else {
-            let htmlContent = "";
-            for (const [xref, text] of Object.entries(textData)) {
-                if (text) {
-                    // Split the text by the | delimiter and format nicely
-                    const lines = text.split('|').map(l => l.trim()).filter(l => l);
-                    let formattedText = lines.map(l => `• ${l}`).join('<br>');
-                    
-                    htmlContent += `
-                        <div style="margin-bottom: 0.75rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                            <h4 style="margin: 0 0 0.25rem 0; color: #fcd34d;">Tile Image Reference: ${xref}</h4>
-                            <div style="padding-left: 0.5rem;">${formattedText}</div>
-                        </div>
-                    `;
-                }
-            }
-            if (!htmlContent) {
-                 htmlContent = "<em>No text was matched for the tiles on this page.</em>";
-            }
-            textModalContent.innerHTML = htmlContent;
+            // Use marked-style formatting (bullets to <br>)
+            const formatted = text
+                .replace(/\n/g, '<br>')
+                .replace(/\*\s/g, '• ') // Convert markdown bullets to dots
+                .replace(/\#\#\s/g, '<strong>') // Simple bold for headers
+                .replace(/\n\n/g, '<div style="margin-bottom: 1rem;"></div>');
+            
+            textModalContent.innerHTML = `
+                <div class="full-page-results" style="line-height: 1.6; font-size: 0.95rem;">
+                    ${formatted}
+                </div>
+            `;
         }
         
         textModal.classList.add('active');
