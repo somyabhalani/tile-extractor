@@ -110,7 +110,8 @@ class TileCatalogueExtractor:
         # Initialize reader (singleton-style to save memory/time)
         if not hasattr(self, '_ocr_reader'):
             print("INFO: Initializing Local OCR Engine (EasyOCR)...")
-            self._ocr_reader = easyocr.Reader(['en'], gpu=False) # Use CPU to ensure it works everywhere
+            # Set verbose=False to avoid Windows charmap encoding errors with progress bars
+            self._ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
         
         doc = fitz.open(self.pdf_path)
         page = doc[page_num - 1]

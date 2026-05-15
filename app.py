@@ -3,11 +3,15 @@ import csv
 import json
 import shutil
 import uuid
+import sys
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
+
+if sys.stdout is not None:
+    sys.stdout.reconfigure(encoding='utf-8')
 
 load_dotenv()
 
