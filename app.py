@@ -125,7 +125,7 @@ async def download_page_assets(job_id: str, page_num: int):
         raise HTTPException(status_code=404, detail="Job results not found.")
 
     # Read CSV to find images for this page and their text
-    page_data = []
+    page_data = {}
     images_to_zip = []
     
     with open(csv_path, "r", encoding="utf-8") as f:
@@ -135,14 +135,7 @@ async def download_page_assets(job_id: str, page_num: int):
                 fname = row.get("filename", "")
                 if fname and (output_dir / fname).exists():
                     images_to_zip.append(fname)
-                    page_data.append({
-                        "filename": fname,
-                        "product_text": row.get("product_text", ""),
-                        "width": row.get("width", ""),
-                        "height": row.get("height", ""),
-                        "format": row.get("format", ""),
-                        "size_bytes": row.get("size", "")
-                    })
+                    page_data[fname] = row.get("product_text", "")
                     
     if not images_to_zip:
         raise HTTPException(status_code=404, detail="No images found for this page.")
