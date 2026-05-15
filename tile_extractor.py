@@ -120,14 +120,13 @@ class TileCatalogueExtractor:
             if rects:
                 rect = rects[0]
                 
-                # Create a padded rectangle (expand by 150 points, which is 300 pixels at 2x)
-                # This captures the text surrounding the tile
-                padding = 150
+                # Create an asymmetric padded rectangle to capture the text BELOW the tile
+                # without capturing the text of adjacent tiles.
                 padded_rect = fitz.Rect(
-                    max(0, rect.x0 - padding),
-                    max(0, rect.y0 - padding),
-                    min(page_rect.width, rect.x1 + padding),
-                    min(page_rect.height, rect.y1 + padding)
+                    max(0, rect.x0 - 20),
+                    max(0, rect.y0 - 20),
+                    min(page_rect.width, rect.x1 + 20),
+                    min(page_rect.height, rect.y1 + 180) # Text is usually below the tile
                 )
                 
                 # Render just this padded crop

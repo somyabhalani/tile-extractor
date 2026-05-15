@@ -8,7 +8,7 @@ load_dotenv()
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-MODEL = "meta/llama-3.2-11b-vision-instruct"
+MODEL = "meta/llama-3.2-90b-vision-instruct"
 
 
 def _scan_single_tile(tile_box: dict, headers: dict) -> dict:
@@ -61,7 +61,7 @@ Required JSON format:
     }
 
     try:
-        response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=60)
+        response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=120)
         response.raise_for_status()
         
         result = response.json()
