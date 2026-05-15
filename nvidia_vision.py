@@ -12,46 +12,55 @@ MODEL = "meta/llama-3.2-11b-vision-instruct"
 
 
 def _build_prompt(image_boxes: list, text_blocks: list) -> str:
-    """Build a structured prompt for the vision model."""
-    
+    """Build a structured prompt for the vision model to scan the full page."""
+
     img_list = "\n".join([
-        f"  - Image #{i+1}: xref={b['xref']}, position=[x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
+        f"  - Tile #{i+1}: xref={b['xref']}, region=[x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
         for i, b in enumerate(image_boxes)
     ])
-    
+
     txt_list = "\n".join([
-        f"  - Text Block #{i+1}: \"{b['text'].replace(chr(10), ' ')}\" at [x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
+        f"  - \"{b['text'].replace(chr(10), ' ').strip()}\" at [x0={b['x0']}, y0={b['y0']}, x1={b['x1']}, y1={b['y1']}]"
         for i, b in enumerate(text_blocks)
     ])
-    
-    prompt = f"""You are analyzing a page from a tile/flooring product catalogue PDF.
 
-I have extracted the following tile images and text blocks from this page, each with their pixel coordinates.
+    prompt = f"""You are an expert at reading tile/flooring product catalogue pages.
 
-TILE IMAGES ON THIS PAGE:
+I am giving you the FULL PAGE image of one page from a PDF catalogue. Your job is to scan the ENTIRE PAGE — every corner, every label, every number — and figure out which product text belongs to which tile image.
+
+TILE IMAGES FOUND ON THIS PAGE (with their pixel coordinates on the page):
 {img_list if img_list else "  (none found)"}
 
-TEXT BLOCKS ON THIS PAGE:
+ALL TEXT FOUND ON THIS PAGE (extracted from the PDF, with coordinates):
 {txt_list if txt_list else "  (none found)"}
 
-YOUR TASK:
-Look at the page image I am providing. For each tile image listed above, find the text that is visually closest to it or clearly labeling it (product name, size, finish, SKU, code, etc.). 
+INSTRUCTIONS:
+1. Look at the FULL PAGE image carefully — not just the area immediately around each tile.
+2. For each tile listed above, collect ALL related text from anywhere on the page that describes that tile. This includes:
+   - Product name or collection name
+   - Size / dimensions (e.g. 600x1200, 800x800)
+   - Finish type (e.g. Polished, Matt, Satin, Glazed)
+   - Surface texture or look (e.g. Marble, Wood, Concrete)
+   - SKU code or product code
+   - Any price, grade, or technical spec nearby
+3. A piece of text "belongs" to a tile if it is: 
+   - Visually closest to that tile on the page
+   - OR clearly labeling/captioning that tile (above, below, beside it)
+   - OR in a panel/section that is dedicated to that tile
+4. If a text block appears to be a page header, footer, or irrelevant (like brand name, page number), skip it.
+5. If a tile truly has no associated text on the page, return an empty string.
 
-Return ONLY a valid JSON object in this exact format, with no extra explanation:
+Return ONLY a valid JSON object in this exact format, nothing else:
 {{
   "associations": [
     {{
-      "xref": <xref number>,
-      "text": "<the matched product text for this tile, or empty string if no text found>"
+      "xref": <xref number as integer>,
+      "text": "<all collected product text for this tile, separated by | character>"
     }}
   ]
 }}
 
-Rules:
-- Only include text that clearly belongs to that specific tile (nearby label, caption, spec).
-- If a tile has no associated text, return an empty string for "text".
-- Do not combine text from different tiles.
-- Output ONLY the JSON, nothing else.
+IMPORTANT: Output ONLY the JSON. No explanation, no markdown, no code block. Just the raw JSON.
 """
     return prompt
 
