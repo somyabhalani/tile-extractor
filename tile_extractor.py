@@ -90,8 +90,10 @@ class TileCatalogueExtractor:
         
         # 2x zoom is the sweet spot for high resolution without massive file sizes
         mat = fitz.Matrix(2.0, 2.0)
+        # Use high-quality JPEG (85) instead of PNG to make the payload 10x smaller
+        # while keeping the text sharp enough for the 90B model.
         pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("png")
-        print(f"DEBUG: Full page image size: {len(img_bytes)/1024:.1f} KB")
+        img_bytes = pix.tobytes("jpg", jpg_quality=85)
+        print(f"DEBUG: Full page JPEG size: {len(img_bytes)/1024:.1f} KB")
         doc.close()
         return base64.b64encode(img_bytes).decode("utf-8")

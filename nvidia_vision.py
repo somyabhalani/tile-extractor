@@ -42,7 +42,7 @@ RULES:
         "messages": [
             {
                 "role": "user",
-                "content": f'{prompt} <img src="data:image/png;base64,{image_b64}" />'
+                "content": f'{prompt} <img src="data:image/jpeg;base64,{image_b64}" />'
             }
         ],
         "max_tokens": 2048,
@@ -51,7 +51,7 @@ RULES:
 
     print(f"INFO: Sending full page (90B Vision) to NVIDIA API...")
     try:
-        response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=90)
+        response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=300)
         response.raise_for_status()
         result = response.json()
         return result['choices'][0]['message']['content']
