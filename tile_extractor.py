@@ -84,16 +84,34 @@ class TileCatalogueExtractor:
             writer.writerows(self._csv_rows)
 
     def get_full_page_image(self, page_num: int):
-        """Render the entire page as a high-resolution base64 string."""
+        """Render the entire page as a high-resolution base64 string, optimized for NVIDIA."""
         doc = fitz.open(self.pdf_path)
         page = doc[page_num - 1]
         
-        # 2x zoom is the sweet spot for high resolution without massive file sizes
+        # 1. Render at high resolution (2x zoom)
         mat = fitz.Matrix(2.0, 2.0)
-        # Use high-quality JPEG (85) instead of PNG to make the payload 10x smaller
-        # while keeping the text sharp enough for the 90B model.
         pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("jpg", jpg_quality=85)
-        print(f"DEBUG: Full page JPEG size: {len(img_bytes)/1024:.1f} KB")
+        
+        # 2. Convert to PIL for smart resizing
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        
+        # 3. Cap the maximum dimension to 2048px (NVIDIA's fast-processing limit)
+        max_dim = 2048
+        if img.width > max_dim or img.height > max_dim:
+            if img.width > img.height:
+                new_w = max_dim
+                new_h = int(img.height * (max_dim / img.width))
+            else:
+                new_h = max_dim
+                new_w = int(img.width * (max_dim / img.height))
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            print(f"DEBUG: Resized page from {pix.width}x{pix.height} to {new_w}x{new_h}")
+
+        # 4. Save as high-quality JPEG
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        img_bytes = buffer.getvalue()
+        
+        print(f"DEBUG: Optimized Page Image size: {len(img_bytes)/1024:.1f} KB")
         doc.close()
         return base64.b64encode(img_bytes).decode("utf-8")
