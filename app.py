@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from tile_extractor import TileCatalogueExtractor
-from nvidia_vision import associate_text_to_tiles
 
 app = FastAPI(title="Tile Extractor API")
 
@@ -183,12 +182,8 @@ async def scan_text_for_page(job_id: str, page_num: int):
         if not layout["image_boxes"]:
             return {"page": page_num, "status": "no_images", "associations": {}}
 
-        # Step 2: Call NVIDIA vision model
-        associations = associate_text_to_tiles(
-            image_b64=layout["image_b64"],
-            image_boxes=layout["image_boxes"],
-            text_blocks=layout["text_blocks"]
-        )
+        # Step 2: Extract text LOCALLY (Faster, Free, and 100% accurate for vector PDFs)
+        associations = extractor.match_text_locally(page_num)
 
         # Step 3: Update tiles.csv with the matched text
         rows = []

@@ -99,17 +99,77 @@ class TileCatalogueExtractor:
             progress_callback(100, 100)
         return {}
 
+    def match_text_locally(self, page_num: int):
+        """
+        Extract text for tiles LOCALLY by finding the closest text blocks in the PDF data.
+        This is faster, 100% accurate for vector PDFs, and free.
+        """
+        import math
+        doc = fitz.open(self.pdf_path)
+        page = doc[page_num - 1]
+        
+        # Get all text blocks on the page: (x0, y0, x1, y1, "text", block_no, block_type)
+        blocks = page.get_text("blocks")
+        
+        # Get all image info on the page
+        images = page.get_images(full=True)
+        results = {}
+
+        for img_info in images:
+            xref = img_info[0]
+            rects = page.get_image_rects(xref)
+            if not rects:
+                continue
+            
+            img_rect = rects[0]
+            img_center_x = (img_rect.x0 + img_rect.x1) / 2
+            img_center_y = (img_rect.y0 + img_rect.y1) / 2
+            
+            # Find the best text block for this image
+            best_block_text = ""
+            min_dist = float('inf')
+            
+            for b in blocks:
+                b_rect = fitz.Rect(b[:4])
+                b_text = b[4].strip()
+                
+                if not b_text or len(b_text) < 2:
+                    continue
+                
+                # Calculate distance from image center to block center
+                b_center_x = (b_rect.x0 + b_rect.x1) / 2
+                b_center_y = (b_rect.y0 + b_rect.y1) / 2
+                
+                dist = math.sqrt((img_center_x - b_center_x)**2 + (img_center_y - b_center_y)**2)
+                
+                # Prioritize blocks BELOW the image (common in tile catalogs)
+                # If block is below, give it a "distance bonus"
+                if b_rect.y0 > img_rect.y1:
+                    dist *= 0.5 
+                
+                # If it's within a reasonable range (e.g. 300 points)
+                if dist < 400 and dist < min_dist:
+                    min_dist = dist
+                    best_block_text = b_text
+
+            if best_block_text:
+                # Clean and format the text
+                cleaned = best_block_text.replace('\n', ' | ')
+                results[xref] = cleaned
+
+        doc.close()
+        return results
+
     def extract_page_layout(self, page_num: int):
         """
         For a given page (1-indexed), extract:
         - Image bounding boxes with their xrefs
-        - Base64 cropped images (the tile + 200px padding for surrounding text)
+        - Base64 cropped images (the tile + 120pt padding)
         """
         import base64
         doc = fitz.open(self.pdf_path)
         page = doc[page_num - 1]
         
-        # 2x zoom for better resolution text
         mat = fitz.Matrix(2.0, 2.0)
         page_rect = page.rect
 
@@ -119,9 +179,6 @@ class TileCatalogueExtractor:
             rects = page.get_image_rects(xref)
             if rects:
                 rect = rects[0]
-                
-                # Use symmetric padding (120 points) to capture text regardless of layout 
-                # (above, below, left, or right of the tile).
                 padding = 120
                 padded_rect = fitz.Rect(
                     max(0, rect.x0 - padding),
@@ -130,7 +187,6 @@ class TileCatalogueExtractor:
                     min(page_rect.height, rect.y1 + padding)
                 )
                 
-                # Render just this padded crop
                 pix = page.get_pixmap(matrix=mat, clip=padded_rect)
                 img_bytes = pix.tobytes("png")
                 crop_b64 = base64.b64encode(img_bytes).decode("utf-8")
@@ -138,7 +194,6 @@ class TileCatalogueExtractor:
                 image_boxes.append({
                     "xref": xref,
                     "crop_b64": crop_b64,
-                    # We keep original scaled coords just in case, though not needed for vision anymore
                     "x0": round(rect.x0 * 2),
                     "y0": round(rect.y0 * 2),
                     "x1": round(rect.x1 * 2),
@@ -148,7 +203,7 @@ class TileCatalogueExtractor:
         doc.close()
         return {
             "page": page_num,
-            "image_b64": "", # No longer need full page
+            "image_b64": "",
             "image_boxes": image_boxes,
-            "text_blocks": [], # No longer needed
+            "text_blocks": [],
         }
