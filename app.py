@@ -143,9 +143,16 @@ async def download_page_assets(job_id: str, page_num: int):
                         "width": row.get("width"),
                         "height": row.get("height")
                     })
-                    # Capture the product list from the first matching row
+                    # Capture the product info from the first matching row
                     if not product_list:
-                        product_list = row.get("product_text", "")
+                        raw_text = row.get("product_text", "")
+                        try:
+                            # Try to parse the structured JSON we now save
+                            data = json.loads(raw_text)
+                            product_list = data.get("products", raw_text)
+                        except:
+                            # Fallback if it's just a raw string from older scans
+                            product_list = raw_text
                     
     if not tiles:
         raise HTTPException(status_code=404, detail="No images found for this page.")
@@ -193,10 +200,22 @@ async def scan_text_for_page(job_id: str, page_num: int):
         # Step 1: Render FULL page at high-res (3x zoom)
         image_b64 = extractor.get_full_page_image(page_num)
 
-        # Step 2: Use 90B to extract all products from the page
-        full_text_results = scan_full_page_products(image_b64)
+        # Step 2: Use AI to extract all products from the page as a structured list
+        products = scan_full_page_products(image_b64)
 
-        # Step 3: Update CSV (Assign this info to all tiles on this page for now, as context)
+        # Step 3: Create the "Perfect" display text for the screen (matching what user liked)
+        display_text = ""
+        for i, p in enumerate(products, 1):
+            display_text += f"**Product {i}: {p.get('name', 'N/A')}**\n\n"
+            display_text += f"* Size: {p.get('size', 'N/A')}\n"
+            display_text += f"* Finish/Surface: {p.get('finish', 'N/A')}\n"
+            display_text += f"* Number of Faces: {p.get('faces', 'N/A')}\n"
+            display_text += f"* Thickness: {p.get('thickness', 'N/A')}\n\n"
+
+        # Step 4: Store a combined JSON in the CSV so the downloader can get the list
+        save_data = json.dumps({"display": display_text, "products": products})
+
+        # Step 5: Update CSV
         rows = []
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -208,7 +227,7 @@ async def scan_text_for_page(job_id: str, page_num: int):
 
         for row in rows:
             if int(row.get("page", 0)) == page_num:
-                row["product_text"] = full_text_results
+                row["product_text"] = save_data
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -218,7 +237,7 @@ async def scan_text_for_page(job_id: str, page_num: int):
         return {
             "page": page_num,
             "status": "success",
-            "full_text": full_text_results
+            "full_text": display_text # Return pretty text for the screen
         }
 
     except Exception as e:
