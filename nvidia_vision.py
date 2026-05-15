@@ -8,7 +8,7 @@ load_dotenv()
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-MODEL = "meta/llama-3.2-90b-vision-instruct"
+MODEL = "meta/llama-3.2-11b-vision-instruct"
 
 
 def _scan_single_tile(tile_box: dict, headers: dict) -> dict:
@@ -97,8 +97,8 @@ def associate_text_to_tiles(image_b64: str, image_boxes: list, text_blocks: list
     
     result_map = {}
     
-    # Process all crops concurrently
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    # Process all crops concurrently but with low workers to avoid API rate limits/timeouts
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(_scan_single_tile, box, headers) for box in image_boxes]
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
