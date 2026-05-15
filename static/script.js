@@ -229,6 +229,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionsContainer.appendChild(infoBtn);
             }
 
+            // Add "Download Page Data" button
+            if (actionsContainer && !document.getElementById(`btn-download-page-${page}`)) {
+                const downloadBtn = document.createElement('a');
+                downloadBtn.id = `btn-download-page-${page}`;
+                downloadBtn.className = 'btn-download-page';
+                downloadBtn.href = `/api/download-page/${jobId}/${page}`;
+                downloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> JSON & Images';
+                actionsContainer.appendChild(downloadBtn);
+            }
+
         } catch (err) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Retry';

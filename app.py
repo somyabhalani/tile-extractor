@@ -111,6 +111,58 @@ async def download_all(job_id: str):
     zip_path = shutil.make_archive(str(job_dir / zip_filename), 'zip', str(output_dir))
     return FileResponse(zip_path, filename=f"extracted_tiles.zip")
 
+@app.get("/api/download-page/{job_id}/{page_num}")
+async def download_page_assets(job_id: str, page_num: int):
+    """Download a ZIP containing images for a specific page and a data.json with their text info."""
+    import zipfile
+    import json
+    
+    job_dir = JOBS_DIR / job_id
+    output_dir = job_dir / "output"
+    csv_path = output_dir / "tiles.csv"
+    
+    if not csv_path.exists():
+        raise HTTPException(status_code=404, detail="Job results not found.")
+
+    # Read CSV to find images for this page and their text
+    page_data = []
+    images_to_zip = []
+    
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if int(row.get("page", 0)) == page_num:
+                fname = row.get("filename", "")
+                if fname and (output_dir / fname).exists():
+                    images_to_zip.append(fname)
+                    page_data.append({
+                        "filename": fname,
+                        "product_text": row.get("product_text", ""),
+                        "width": row.get("width", ""),
+                        "height": row.get("height", ""),
+                        "format": row.get("format", ""),
+                        "size_bytes": row.get("size", "")
+                    })
+                    
+    if not images_to_zip:
+        raise HTTPException(status_code=404, detail="No images found for this page.")
+
+    # Create a temporary ZIP file specifically for this page
+    zip_filename = f"page_{page_num}_{job_id}.zip"
+    zip_path = job_dir / zip_filename
+    
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add images
+        for fname in images_to_zip:
+            file_path = output_dir / fname
+            zipf.write(file_path, arcname=fname)
+            
+        # Add data.json
+        json_data = json.dumps(page_data, indent=4)
+        zipf.writestr("page_data.json", json_data)
+
+    return FileResponse(zip_path, filename=f"page_{page_num}_tiles.zip")
+
 @app.post("/api/scan-text/{job_id}/{page_num}")
 async def scan_text_for_page(job_id: str, page_num: int):
     """Use NVIDIA vision model to associate text to tiles on a specific page."""
