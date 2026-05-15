@@ -88,14 +88,16 @@ def associate_text_to_tiles(image_b64: str, image_boxes: list, text_blocks: list
     """
     import concurrent.futures
     
-    if not NVIDIA_API_KEY:
-        raise ValueError("NVIDIA_API_KEY is not set in .env file.")
+    # Read dynamically to pick up Render environment variables
+    api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("NVIDIA_API_KEY environment variable is not set. Please add it to your Render Environment Variables.")
 
     if not image_boxes:
         return {}
 
     headers = {
-        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Accept": "application/json"
     }
 
