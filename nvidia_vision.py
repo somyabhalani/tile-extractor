@@ -17,20 +17,22 @@ def _scan_single_tile(tile_box: dict, headers: dict) -> dict:
     if not crop_b64:
         return {"xref": tile_box["xref"], "text": ""}
         
-    prompt = """You are an expert reading tile product catalogs.
-I am giving you an image crop containing ONE tile and its surrounding label text.
-Extract the product text describing this tile. Specifically look for and include:
-- Product Name
-- Size / Dimensions
-- Finish
-- Code / SKU
-- Number of Faces / Random Faces (e.g. '5 Random Faces')
+    prompt = """You are a strict data extraction robot.
+Look at the provided image crop of a tile and its text label.
+Extract the product details.
 
-If there is no readable text, return an empty string.
+CRITICAL RULES:
+1. NEVER use conversational language. DO NOT say "The image shows" or "Based on the image".
+2. If a detail is not visible, leave it blank. Do not explain that it is missing.
+3. Your entire response MUST be ONLY a valid JSON object.
 
-Return ONLY valid JSON in this exact format, nothing else:
+Required JSON format:
 {
-  "text": "<all extracted product text, separated by |>"
+  "Product": "name here or blank",
+  "Size": "size here or blank",
+  "Finish": "finish here or blank",
+  "SKU": "code here or blank",
+  "Faces": "faces here or blank"
 }"""
 
     payload = {
@@ -53,7 +55,7 @@ Return ONLY valid JSON in this exact format, nothing else:
             }
         ],
         "max_tokens": 256,
-        "temperature": 0.10,
+        "temperature": 0.0,
         "top_p": 0.90,
         "stream": False
     }
@@ -68,12 +70,34 @@ Return ONLY valid JSON in this exact format, nothing else:
         # Try JSON parsing
         json_match = re.search(r'\{[\s\S]*\}', raw_content)
         if json_match:
-            parsed = json.loads(json_match.group())
-            text = parsed.get("text", "").strip()
-            return {"xref": tile_box["xref"], "text": text}
+            try:
+                parsed = json.loads(json_match.group())
+                # Combine non-empty values
+                vals = [str(v).strip() for v in parsed.values() if v and str(v).strip() and str(v).lower() not in ('n/a', 'none', 'blank', 'not provided', 'not specified')]
+                text = " | ".join(vals)
+                return {"xref": tile_box["xref"], "text": text}
+            except:
+                pass
             
-        # Fallback raw extraction (if it just returned text instead of JSON)
-        text = raw_content.replace('\n', ' | ').strip()
+        # Fallback raw extraction
+        lines = []
+        for line in raw_content.split('\n'):
+            line = line.strip()
+            # Ignore conversational fluff
+            lower = line.lower()
+            if any(x in lower for x in ["the image", "based on", "not provided", "not explicitly", "not specified", "is described", "could indicate"]):
+                continue
+            # Remove markdown bullets
+            line = re.sub(r'^[\*\-]\s*', '', line)
+            line = re.sub(r'[\{\}"]', '', line)
+            if line and len(line) > 1 and ":" in line:
+                val = line.split(":", 1)[1].strip()
+                if val and val.lower() not in ('n/a', 'none', 'blank', 'not provided', 'not specified'):
+                    lines.append(val)
+            elif line and len(line) > 1 and " | " in line:
+                lines.append(line)
+                
+        text = " | ".join(lines)
         return {"xref": tile_box["xref"], "text": text}
         
     except Exception as e:
