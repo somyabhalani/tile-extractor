@@ -19,7 +19,13 @@ def _scan_single_tile(tile_box: dict, headers: dict) -> dict:
         
     prompt = """You are an expert reading tile product catalogs.
 I am giving you an image crop containing ONE tile and its surrounding label text.
-Extract the product text describing this tile (Product Name, Size, Finish, Code/SKU).
+Extract the product text describing this tile. Specifically look for and include:
+- Product Name
+- Size / Dimensions
+- Finish
+- Code / SKU
+- Number of Faces / Random Faces (e.g. '5 Random Faces')
+
 If there is no readable text, return an empty string.
 
 Return ONLY valid JSON in this exact format, nothing else:
