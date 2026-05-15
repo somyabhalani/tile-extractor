@@ -88,9 +88,10 @@ class TileCatalogueExtractor:
         doc = fitz.open(self.pdf_path)
         page = doc[page_num - 1]
         
-        # 3x zoom for maximum AI readability of small text
-        mat = fitz.Matrix(3.0, 3.0)
+        # 2x zoom is the sweet spot for high resolution without massive file sizes
+        mat = fitz.Matrix(2.0, 2.0)
         pix = page.get_pixmap(matrix=mat)
         img_bytes = pix.tobytes("png")
+        print(f"DEBUG: Full page image size: {len(img_bytes)/1024:.1f} KB")
         doc.close()
         return base64.b64encode(img_bytes).decode("utf-8")
