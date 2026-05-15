@@ -129,8 +129,8 @@ async def download_page_assets(job_id: str, page_num: int):
         raise HTTPException(status_code=404, detail="Job results not found.")
 
     # Read CSV to find images for this page and their text
-    page_data = {}
-    images_to_zip = []
+    product_list = ""
+    tiles = []
     
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -138,11 +138,24 @@ async def download_page_assets(job_id: str, page_num: int):
             if int(row.get("page", 0)) == page_num:
                 fname = row.get("filename", "")
                 if fname and (output_dir / fname).exists():
-                    images_to_zip.append(fname)
-                    page_data[fname] = row.get("product_text", "")
+                    tiles.append({
+                        "filename": fname,
+                        "width": row.get("width"),
+                        "height": row.get("height")
+                    })
+                    # Capture the product list from the first matching row
+                    if not product_list:
+                        product_list = row.get("product_text", "")
                     
-    if not images_to_zip:
+    if not tiles:
         raise HTTPException(status_code=404, detail="No images found for this page.")
+
+    # Properly aligned JSON structure
+    page_data = {
+        "page_number": page_num,
+        "product_info": product_list,
+        "tiles": tiles
+    }
 
     # Create a temporary ZIP file specifically for this page
     zip_filename = f"page_{page_num}_{job_id}.zip"
@@ -150,11 +163,11 @@ async def download_page_assets(job_id: str, page_num: int):
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Add images
-        for fname in images_to_zip:
-            file_path = output_dir / fname
-            zipf.write(file_path, arcname=fname)
+        for tile in tiles:
+            file_path = output_dir / tile["filename"]
+            zipf.write(file_path, arcname=tile["filename"])
             
-        # Add data.json
+        # Add page_data.json
         json_data = json.dumps(page_data, indent=4)
         zipf.writestr("page_data.json", json_data)
 
