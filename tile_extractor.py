@@ -98,3 +98,60 @@ class TileCatalogueExtractor:
         if progress_callback:
             progress_callback(100, 100)
         return {}
+
+    def extract_page_layout(self, page_num: int):
+        """
+        For a given page (1-indexed), extract:
+        - Rendered page PNG as base64 string (for vision model)
+        - Image bounding boxes with their xrefs
+        - Text blocks with their bounding boxes and content
+        """
+        import base64
+        doc = fitz.open(self.pdf_path)
+        page = doc[page_num - 1]
+
+        # 1. Render the page as a PNG image for the vision model
+        mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better resolution
+        clip = page.rect
+        pix = page.get_pixmap(matrix=mat, clip=clip)
+        img_bytes = pix.tobytes("png")
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
+        # 2. Get all image bounding boxes on this page
+        image_boxes = []
+        for img_info in page.get_images(full=True):
+            xref = img_info[0]
+            # Get the bounding box of this image on the page
+            rects = page.get_image_rects(xref)
+            if rects:
+                rect = rects[0]
+                # Scale to match the 2x rendered image
+                image_boxes.append({
+                    "xref": xref,
+                    "x0": round(rect.x0 * 2),
+                    "y0": round(rect.y0 * 2),
+                    "x1": round(rect.x1 * 2),
+                    "y1": round(rect.y1 * 2),
+                })
+
+        # 3. Get all text blocks with positions
+        text_blocks = []
+        blocks = page.get_text("blocks")
+        for b in blocks:
+            x0, y0, x1, y1, text, block_no, block_type = b
+            if block_type == 0 and text.strip():  # type 0 = text block
+                text_blocks.append({
+                    "text": text.strip(),
+                    "x0": round(x0 * 2),
+                    "y0": round(y0 * 2),
+                    "x1": round(x1 * 2),
+                    "y1": round(y1 * 2),
+                })
+
+        doc.close()
+        return {
+            "page": page_num,
+            "image_b64": img_b64,
+            "image_boxes": image_boxes,
+            "text_blocks": text_blocks,
+        }
