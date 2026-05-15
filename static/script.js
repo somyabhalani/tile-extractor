@@ -278,8 +278,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let formattedText = lines.map(l => `• ${l}`).join('<br>');
                     
                     htmlContent += `
-                        <div style="margin-bottom: 1.5rem; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                            <h4 style="margin: 0 0 0.5rem 0; color: #fcd34d;">Tile Image Reference: ${xref}</h4>
+                        <div style="margin-bottom: 0.75rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <h4 style="margin: 0 0 0.25rem 0; color: #fcd34d;">Tile Image Reference: ${xref}</h4>
                             <div style="padding-left: 0.5rem;">${formattedText}</div>
                         </div>
                     `;
