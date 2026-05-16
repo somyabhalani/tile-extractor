@@ -166,28 +166,13 @@ async def download_page_assets(job_id: str, page_num: int):
     if not tiles:
         raise HTTPException(status_code=404, detail="No images found for this page.")
 
-    # Build the JSON exactly like the model output
-    if isinstance(product_list, list) and product_list:
-        page_data = {
-            "page_number": page_num,
-            "products": product_list,
-            "tiles": tiles
-        }
-    elif isinstance(product_list, str) and product_list.strip():
-        # Fallback: raw text — split into clean lines so JSON is readable
-        clean_lines = [line.strip() for line in product_list.replace('\\n', '\n').replace('\\t', ' ').split('\n') if line.strip()]
-        page_data = {
-            "page_number": page_num,
-            "products": [],
-            "extracted_text": clean_lines,
-            "tiles": tiles
-        }
-    else:
-        page_data = {
-            "page_number": page_num,
-            "products": [],
-            "tiles": tiles
-        }
+    # Build the JSON exactly like the model output — Structured and Clean
+    page_data = {
+        "page_number": page_num,
+        "job_id": job_id,
+        "products": product_list, # This is now a structured list of dicts
+        "tiles": tiles
+    }
 
     # Create a temporary ZIP file specifically for this page
     zip_filename = f"page_{page_num}_{job_id}.zip"
@@ -199,7 +184,7 @@ async def download_page_assets(job_id: str, page_num: int):
             file_path = output_dir / tile["filename"]
             zipf.write(file_path, arcname=tile["filename"])
 
-        # Add page_data.json — exact model output format
+        # Add page_data.json — Pretty-printed with no extra escaping
         json_data = json.dumps(page_data, indent=4, ensure_ascii=False)
         zipf.writestr("page_data.json", json_data)
 
@@ -220,8 +205,10 @@ def run_scan_task(job_id: str, page_num: int, pdf_path: str, output_dir: str, cs
         products = result_dict.get("products", [])
         raw_text = result_dict.get("raw_text", "")
 
-        # Step 3: Build display text
+        # Step 3: Build display text and ensure structured objects
         display_text = ""
+        structured_products = []
+
         if raw_text and not products:
             display_text = raw_text
             blocks = re.split(r'(?:\n|^)(?:\d+\.|\*)\s*\*\*', raw_text)
@@ -229,19 +216,41 @@ def run_scan_task(job_id: str, page_num: int, pdf_path: str, output_dir: str, cs
                 if not block.strip() or len(block) < 20: continue
                 name_match = re.search(r'^(.*?)\*\*', block)
                 name = name_match.group(1).strip() if name_match else "N/A"
-                products.append({"name": name, "display": block.strip()})
+                
+                # Clean up the block text for display
+                clean_display = block.strip().replace("\t", " ").replace("\\n", "\n")
+                
+                prod_obj = {
+                    "name": name,
+                    "display": clean_display
+                }
+                products.append(prod_obj)
+                structured_products.append(prod_obj)
         else:
             for i, p in enumerate(products, 1):
                 name = p.get('name') or "N/A"
-                text_block = f"**{name}**\n* Collection: {p.get('collection') or 'N/A'}\n"
-                text_block += f"* Size: {p.get('size') or 'N/A'}\n"
-                text_block += f"* Finish: {p.get('surface') or 'N/A'}\n"
-                text_block += f"* Faces: {p.get('faces') or 'N/A'}\n"
-                text_block += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
-                text_block += f"* Position: {p.get('position') or 'N/A'}\n"
-                text_block += f"* Description: {p.get('image_description') or 'N/A'}"
+                
+                # Ensure each field is a clean string, not null
+                p["name"] = name
+                p["collection"] = p.get("collection") or "N/A"
+                p["size"] = p.get("size") or "N/A"
+                p["surface"] = p.get("surface") or p.get("finish") or "N/A"
+                p["faces"] = p.get("faces") or "N/A"
+                p["thickness"] = p.get("thickness") or "N/A"
+                p["position"] = p.get("position") or "N/A"
+                p["description"] = p.get("image_description") or "N/A"
+
+                text_block = f"**{name}**\n* Collection: {p['collection']}\n"
+                text_block += f"* Size: {p['size']}\n"
+                text_block += f"* Finish: {p['surface']}\n"
+                text_block += f"* Faces: {p['faces']}\n"
+                text_block += f"* Thickness: {p['thickness']}\n"
+                text_block += f"* Position: {p['position']}\n"
+                text_block += f"* Description: {p['description']}"
+                
                 p["display"] = text_block
                 display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
+                structured_products.append(p)
 
         if not display_text.strip():
             display_text = "No products detected on this page."
