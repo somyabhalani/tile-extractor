@@ -207,23 +207,33 @@ async def scan_text_for_page(job_id: str, page_num: int):
         # Step 2: Use AI to extract all products from the page as a structured list
         result_dict = scan_full_page_products(image_b64)
         products = result_dict.get("products", [])
+        raw_text = result_dict.get("raw_text", "")
 
-        # Step 3: Create the "Perfect" display text for the screen (matching what user liked)
+        # Step 3: Build the display text
         display_text = ""
-        for i, p in enumerate(products, 1):
-            name = p.get('name') or "N/A"
-            collection = p.get('collection') or "N/A"
-            display_text += f"**Product {i}: {name}**\n"
-            display_text += f"* Collection: {collection}\n"
-            display_text += f"* Size: {p.get('size') or 'N/A'}\n"
-            display_text += f"* Finish/Surface: {p.get('surface') or 'N/A'}\n"
-            display_text += f"* Number of Faces: {p.get('faces') or 'N/A'}\n"
-            display_text += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
-            display_text += f"* Position: {p.get('position') or 'N/A'}\n"
-            display_text += f"* Description: {p.get('image_description') or 'N/A'}\n"
-            if p.get("confidence") == "low":
-                display_text += f"* Confidence: Low ⚠️\n"
-            display_text += "\n"
+
+        if raw_text and not products:
+            # Fallback mode: model returned plain text instead of JSON
+            display_text = raw_text
+        else:
+            # Structured mode: build pretty display from product list
+            for i, p in enumerate(products, 1):
+                name = p.get('name') or "N/A"
+                collection = p.get('collection') or "N/A"
+                display_text += f"**Product {i}: {name}**\n"
+                display_text += f"* Collection: {collection}\n"
+                display_text += f"* Size: {p.get('size') or 'N/A'}\n"
+                display_text += f"* Finish/Surface: {p.get('surface') or 'N/A'}\n"
+                display_text += f"* Number of Faces: {p.get('faces') or 'N/A'}\n"
+                display_text += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
+                display_text += f"* Position: {p.get('position') or 'N/A'}\n"
+                display_text += f"* Description: {p.get('image_description') or 'N/A'}\n"
+                if p.get("confidence") == "low":
+                    display_text += f"* Confidence: Low ⚠️\n"
+                display_text += "\n"
+
+        if not display_text.strip():
+            display_text = "No products detected on this page."
 
         # Step 4: Store a combined JSON in the CSV so the downloader can get the list
         save_data = json.dumps({"display": display_text, "products": products})

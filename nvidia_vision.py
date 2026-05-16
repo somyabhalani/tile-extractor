@@ -90,12 +90,66 @@ If you are uncertain about any value add a "confidence": "low" field to that pro
         response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=300)
         response.raise_for_status()
         result = response.json()
-        content = result['choices'][0]['message']['content']
-        
-        # Clean up markdown if AI includes it despite instructions
+        content = result['choices'][0]['message']['content'].strip()
+
+        if not content:
+            print("WARN: Empty response from model, falling back to text mode...")
+            return _fallback_text_scan(image_b64, headers)
+
+        # Clean up markdown fences if AI includes them despite instructions
         content = re.sub(r'```json\s*|\s*```', '', content).strip()
-        
-        return json.loads(content)
+
+        # Try to extract JSON even if there is preamble text before/after it
+        json_match = re.search(r'\{[\s\S]*\}', content)
+        if json_match:
+            return json.loads(json_match.group(0))
+
+        print("WARN: No JSON found in response, falling back to text mode...")
+        return _fallback_text_scan(image_b64, headers)
+
     except Exception as e:
         print(f"ERROR: AI Extraction failed: {e}")
         return {"products": []}
+
+
+def _fallback_text_scan(image_b64: str, headers: dict) -> dict:
+    """Fallback: Ask the model for plain text if JSON fails."""
+    fallback_prompt = """You are a tile catalogue data extraction expert.
+Look at this catalogue page and list every distinct tile product.
+
+For each product write:
+- Product Name
+- Collection
+- Size
+- Thickness
+- Surface/Finish
+- Number of Faces
+- Position on page
+- Brief description of the tile appearance
+
+Be direct and concise. List all products you can see."""
+
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": fallback_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "max_tokens": 2048,
+        "temperature": 0.2
+    }
+    print("INFO: Running fallback plain-text scan...")
+    try:
+        response = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=300)
+        response.raise_for_status()
+        content = response.json()['choices'][0]['message']['content'].strip()
+        return {"products": [], "raw_text": content}
+    except Exception as e:
+        print(f"ERROR: Fallback also failed: {e}")
+        return {"products": [], "raw_text": f"Error: {str(e)}"}
+
