@@ -20,8 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lbFormat = document.getElementById('lb-format');
     const lbPage = document.getElementById('lb-page');
     const lbDownload = document.getElementById('lb-download');
-    const lbProductWrap = document.getElementById('lb-product-wrap');
-    const lbProductText = document.getElementById('lb-product-text');
+    const lbFilepath = document.getElementById('lb-filepath');
 
     // Text Info Modal Elements
     const textModal = document.getElementById('text-modal');
@@ -271,29 +270,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lbDownload.href = `/api/images/${jobId}/${img.filename}`;
         lbDownload.setAttribute('download', img.filename);
 
-        // Show individual product info in lightbox
-        const lbSelect = document.getElementById('lb-product-select');
-        
-        // Use the precise coordinate-matched text from the backend
-        const matchedText = window.tileMatches && window.tileMatches[img.filename];
-
-        if (matchedText) {
-            lbSelect.style.display = 'none';
-            lbProductText.innerHTML = matchedText.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
-            lbProductWrap.style.display = 'flex';
-        } else {
-            // Fallback if no specific match is found for this image (e.g. older scans)
-            const page = img.page;
-            const text = scannedTextData[page];
-            
-            if (text) {
-                lbSelect.style.display = 'none';
-                lbProductText.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
-                lbProductWrap.style.display = 'flex';
-            } else {
-                lbProductWrap.style.display = 'none';
-                lbSelect.style.display = 'none';
-            }
+        // Show physical image details (Address / Folder Path)
+        if (lbFilepath) {
+            lbFilepath.textContent = `output/${img.filename}`;
         }
 
         lightbox.classList.add('active');
