@@ -253,15 +253,62 @@ document.addEventListener('DOMContentLoaded', () => {
         lbDownload.href = `/api/images/${jobId}/${img.filename}`;
         lbDownload.setAttribute('download', img.filename);
 
-        // Show page-level product info in lightbox
+        // Show individual product info in lightbox
         const page = img.page;
         const text = scannedTextData[page];
+        const lbSelect = document.getElementById('lb-product-select');
 
         if (text) {
-            lbProductText.innerHTML = text.replace(/\n/g, '<br>');
+            // Check if it has structured **Product X:** headers
+            if (text.includes('**Product ')) {
+                const chunks = text.split(/\*\*Product \d+:/).filter(p => p.trim() !== "");
+                
+                if (chunks.length > 1) {
+                    // Multiple products found -> show dropdown
+                    lbSelect.innerHTML = '';
+                    lbSelect.style.display = 'block';
+                    
+                    const parsedProducts = [];
+                    chunks.forEach((chunk, index) => {
+                        const lines = chunk.trim().split('\n');
+                        const nameLine = lines[0].replace(/\*\*/g, '').trim(); // e.g., "ROCKSTONE NERO"
+                        
+                        // Try to find the position to help user match
+                        let position = "";
+                        const posMatch = chunk.match(/\* Position: (.*)/i);
+                        if (posMatch) position = ` (${posMatch[1]})`;
+
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = `${index + 1}: ${nameLine}${position}`;
+                        lbSelect.appendChild(option);
+                        
+                        parsedProducts.push(chunk.trim().replace(/\n/g, '<br>').replace(/\*\s/g, '• '));
+                    });
+
+                    // Update text when dropdown changes
+                    lbSelect.onchange = () => {
+                        lbProductText.innerHTML = parsedProducts[lbSelect.value];
+                    };
+                    
+                    // Trigger initial display
+                    lbSelect.value = 0;
+                    lbProductText.innerHTML = parsedProducts[0];
+
+                } else {
+                    // Only 1 product -> no dropdown needed
+                    lbSelect.style.display = 'none';
+                    lbProductText.innerHTML = chunks[0].trim().replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
+                }
+            } else {
+                // Fallback raw text mode -> just show everything
+                lbSelect.style.display = 'none';
+                lbProductText.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
+            }
             lbProductWrap.style.display = 'flex';
         } else {
             lbProductWrap.style.display = 'none';
+            lbSelect.style.display = 'none';
         }
 
         lightbox.classList.add('active');
