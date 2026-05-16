@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import re
 import shutil
 import uuid
 import sys
