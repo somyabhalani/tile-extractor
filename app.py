@@ -240,7 +240,7 @@ def run_scan_task(job_id: str, page_num: int, pdf_path: str, output_dir: str, cs
                 p["position"] = p.get("position") or "N/A"
                 p["description"] = p.get("image_description") or "N/A"
 
-                text_block = f"**{name}**\n* Collection: {p['collection']}\n"
+                text_block = f"**{name}**\n* Size: {p['size']}\n"
                 text_block += f"* Size: {p['size']}\n"
                 text_block += f"* Finish: {p['surface']}\n"
                 text_block += f"* Faces: {p['faces']}\n"
@@ -249,8 +249,13 @@ def run_scan_task(job_id: str, page_num: int, pdf_path: str, output_dir: str, cs
                 text_block += f"* Description: {p['description']}"
                 
                 p["display"] = text_block
-                display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
-                structured_products.append(p)
+                
+                # FINAL FILTER: Only add if it has a name and at least some technical spec (like size)
+                if name != "N/A" and p["size"] != "N/A":
+                    display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
+                    structured_products.append(p)
+                else:
+                    print(f"INFO: Filtered out non-product header: {name}")
 
         if not display_text.strip():
             display_text = "No products detected on this page."

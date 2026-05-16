@@ -26,31 +26,34 @@ I will give you an image of a tile catalogue page.
 
 Your job is to identify every distinct tile PRODUCT on the page and extract its information.
 
-Rules:
-- A product is identified by its NAME (e.g. "CATRIA ASH MT", "ROCKSTONE NERO" etc)
-- Each product may have multiple tile images shown (different sizes/face variants) - they all belong to the same product
-- The spec text (size, thickness, surface, faces) near a tile belongs to that tile's product
-- If multiple tiles share the same spec block, they are the same product
-- Ignore QR codes, logos, page numbers, decorative elements
+CRITICAL RULES:
+1. ONLY count items that are actual TILE PRODUCTS with technical specifications.
+2. IGNORE Brand Logos, Collection Headers (e.g., "ROCKSTONE COLLECTION"), and page titles.
+3. A product MUST have at least a Name and a Size (e.g., 600x600mm) associated with it in the nearby text.
+4. If you see a header like "DURAGRES" or "ROCKSTONE" with no specs below it, SKIP IT completely.
+5. DO NOT hallucinate. If you see 4 physical tile images, your JSON must contain exactly 4 products.
+6. NO INTRO OR OUTRO. Just the JSON.
+
+NEGATIVE CONSTRAINTS:
+- NEVER list a brand name as a product.
+- NEVER list a collection title as a product.
+- NEVER count the same tile twice if it's just shown in a different lifestyle room-setting.
 
 For each product return:
-- name: full product name as written
-- collection: brand/collection name if shown (e.g. "ROCKSTONE")
-- size: tile dimensions (e.g. "600x600mm")
-- thickness: (e.g. "12mm")
-- surface: finish type (e.g. "Matt", "Polished", "Glossy")
-- faces: number of faces as integer
-- position: where is the PRIMARY large tile on the page? (top-left / top-right / bottom-left / bottom-right / center / full-page)
-- image_description: briefly describe the tile appearance (color, texture, pattern) in 1 sentence
+- name: full product name (e.g. "CATRIA ASH MT")
+- size: dimensions (e.g. "600x600mm")
+- thickness: e.g. "12mm"
+- surface: finish type
+- faces: number of faces
+- position: primary location on page
+- image_description: 1-sentence description
 
-Return ONLY valid JSON, no explanation, no markdown, no preamble:
-
+Return ONLY valid JSON:
 {
-  "page_number": <if visible, else null>,
+  "page_number": null,
   "products": [
     {
       "name": "",
-      "collection": "",
       "size": "",
       "thickness": "",
       "surface": "",
@@ -60,9 +63,6 @@ Return ONLY valid JSON, no explanation, no markdown, no preamble:
     }
   ]
 }
-
-If a field is not visible on the page use null.
-If you are uncertain about any value add a "confidence": "low" field to that product object.
 """
 
     payload = {
