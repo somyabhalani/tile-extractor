@@ -145,34 +145,40 @@ async def download_page_assets(job_id: str, page_num: int):
                     })
                     # Capture the product info from the first matching row
                     if not product_list:
-                        raw_text = row.get("product_text", "")
+                        raw_csv = row.get("product_text", "")
                         try:
-                            # Try to parse the structured JSON we now save
-                            data = json.loads(raw_text)
-                            # Handle the new dict structure (has a 'products' key)
-                            if isinstance(data.get("products"), list):
+                            data = json.loads(raw_csv)
+                            # Prefer structured products list if it has entries
+                            if isinstance(data.get("products"), list) and data["products"]:
                                 product_list = data["products"]
+                            # Otherwise use raw_text or display as fallback
+                            elif data.get("raw_text"):
+                                product_list = data["raw_text"]
+                            elif data.get("display"):
+                                product_list = data["display"]
                             else:
-                                product_list = data.get("products", raw_text)
+                                product_list = []
                         except:
-                            # Fallback if it's just a raw string from older scans
-                            product_list = raw_text
+                            product_list = raw_csv
                     
     if not tiles:
         raise HTTPException(status_code=404, detail="No images found for this page.")
 
     # Build the JSON exactly like the model output
-    # product_list is already a list of product dicts from the AI
-    page_data = {
-        "page_number": page_num,
-        "products": product_list if isinstance(product_list, list) else [],
-        "tiles": tiles
-    }
-
-    # If it was a fallback plain-text scan, include that too
-    if isinstance(product_list, str) and product_list:
-        page_data["products"] = []
-        page_data["raw_text"] = product_list
+    if isinstance(product_list, list):
+        page_data = {
+            "page_number": page_num,
+            "products": product_list,
+            "tiles": tiles
+        }
+    else:
+        # Fallback: raw text from model when JSON parsing failed
+        page_data = {
+            "page_number": page_num,
+            "products": [],
+            "raw_text": product_list,
+            "tiles": tiles
+        }
 
     # Create a temporary ZIP file specifically for this page
     zip_filename = f"page_{page_num}_{job_id}.zip"
@@ -242,7 +248,7 @@ async def scan_text_for_page(job_id: str, page_num: int):
             display_text = "No products detected on this page."
 
         # Step 4: Store a combined JSON in the CSV so the downloader can get the list
-        save_data = json.dumps({"display": display_text, "products": products})
+        save_data = json.dumps({"display": display_text, "products": products, "raw_text": raw_text})
 
         # Step 5: Update CSV
         rows = []
