@@ -6,6 +6,44 @@
     <title>Tile Image Extraction</title>
     <link rel="stylesheet" href="style.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .site-footer {
+            text-align: center;
+            padding: 2.5rem;
+            margin: 4rem auto 0;
+            max-width: 1000px;
+            width: 95%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            border-radius: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .footer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+            padding-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .footer-main strong { color: var(--primary); font-weight: 700; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--text-color); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .footer-links a:hover { color: var(--primary); }
+        .footer-bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+        .legal-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .legal-links a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; }
+        .legal-links a:hover { color: var(--primary); }
+        .badge-link { color: #059669 !important; font-weight: 600; }
+        @media (max-width: 768px) {
+            .footer-top, .footer-bottom { flex-direction: column; text-align: center; }
+            .footer-links, .legal-links { justify-content: center; }
+        }
+    </style>
 </head>
 <body>
     <div class="marble-background"></div>
@@ -69,12 +107,22 @@
         </main>
 
         <footer class="site-footer">
-            <p class="footer-main">Built by Somya Bhalani</p>
-            <div class="footer-links">
-                <a href="https://github.com/somyabhalani" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a>
-                <a href="tel:8320408204"><i class="fa-solid fa-phone"></i> 8320408204</a>
+            <div class="footer-top">
+                <p class="footer-main">Developed by <strong>Somya Bhalani</strong></p>
+                <div class="footer-links">
+                    <a href="https://github.com/somyabhalani" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a>
+                    <a href="mailto:work.anantalabs@gmail.com"><i class="fa-solid fa-envelope"></i> work.anantalabs@gmail.com</a>
+                </div>
             </div>
-            <p class="footer-rights">&copy; 2026 All Rights Reserved.</p>
+            <div class="footer-bottom">
+                <div class="legal-links">
+                    <a href="#">Terms & Conditions</a>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">How to Use</a>
+                    <a href="#" class="badge-link">Fully Perfect <i class="fa-solid fa-circle-check"></i></a>
+                </div>
+                <p class="footer-rights">&copy; 2026 Ananta Labs. All Rights Reserved.</p>
+            </div>
         </footer>
     </div>
 
