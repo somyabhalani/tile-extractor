@@ -232,24 +232,43 @@ async def scan_text_for_page(job_id: str, page_num: int):
         display_text = ""
 
         if raw_text and not products:
-            # Fallback mode: model returned plain text instead of JSON
+            # Fallback mode: parse the raw text to extract products and coordinates
             display_text = raw_text
+            
+            # Use regex to split into blocks and find coordinates
+            blocks = re.split(r'(?:\n|^)\d+\.\s+\*\*', raw_text)
+            for block in blocks:
+                if not block.strip(): continue
+                
+                name_match = re.search(r'^(.*?)\*\*', block)
+                name = name_match.group(1).strip() if name_match else "N/A"
+                
+                coord_match = re.search(r'Coordinates:.*?\[(\d+),\s*(\d+)\]', block)
+                if coord_match:
+                    try:
+                        cx = int(coord_match.group(1))
+                        cy = int(coord_match.group(2))
+                        products.append({
+                            "name": name,
+                            "coordinates": [cx, cy],
+                            "display": block.strip()
+                        })
+                    except: pass
         else:
             # Structured mode: build pretty display from product list
             for i, p in enumerate(products, 1):
                 name = p.get('name') or "N/A"
                 collection = p.get('collection') or "N/A"
-                display_text += f"**Product {i}: {name}**\n"
-                display_text += f"* Collection: {collection}\n"
-                display_text += f"* Size: {p.get('size') or 'N/A'}\n"
-                display_text += f"* Finish/Surface: {p.get('surface') or 'N/A'}\n"
-                display_text += f"* Number of Faces: {p.get('faces') or 'N/A'}\n"
-                display_text += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
-                display_text += f"* Position: {p.get('position') or 'N/A'}\n"
-                display_text += f"* Description: {p.get('image_description') or 'N/A'}\n"
-                if p.get("confidence") == "low":
-                    display_text += f"* Confidence: Low ⚠️\n"
-                display_text += "\n"
+                text_block = f"**{name}**\n* Collection: {collection}\n"
+                text_block += f"* Size: {p.get('size') or 'N/A'}\n"
+                text_block += f"* Finish: {p.get('surface') or 'N/A'}\n"
+                text_block += f"* Faces: {p.get('faces') or 'N/A'}\n"
+                text_block += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
+                text_block += f"* Position: {p.get('position') or 'N/A'}\n"
+                text_block += f"* Description: {p.get('image_description') or 'N/A'}"
+                
+                p["display"] = text_block # Store isolated text for later matching
+                display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
 
         if not display_text.strip():
             display_text = "No products detected on this page."
@@ -291,10 +310,7 @@ async def scan_text_for_page(job_id: str, page_num: int):
                                 best_idx = i
                                 
                         if best_product:
-                            # Build isolated display text for this specific matched tile
-                            name = best_product.get('name') or "N/A"
-                            collection = best_product.get('collection') or "N/A"
-                            matched_text = f"**{name}**\n* Collection: {collection}\n* Size: {best_product.get('size') or 'N/A'}\n* Finish: {best_product.get('surface') or 'N/A'}\n* Faces: {best_product.get('faces') or 'N/A'}\n* Thickness: {best_product.get('thickness') or 'N/A'}\n* Position: {best_product.get('position') or 'N/A'}\n* Description: {best_product.get('image_description') or 'N/A'}"
+                            matched_text = best_product.get("display") or display_text
                     except Exception as e:
                         print(f"WARN: Coordinate match failed for {row['filename']}: {e}")
                 
