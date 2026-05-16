@@ -261,21 +261,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Lightbox ---
     function openLightbox(img, jobId, cardEl) {
-        lightboxImg.src = `/api/images/${jobId}/${img.filename}`;
-        lbFilename.textContent = img.filename;
-        lbDims.textContent = `${img.width} x ${img.height} px`;
-        lbSize.textContent = formatBytes(parseInt(img.size));
-        lbFormat.textContent = img.format || 'N/A';
-        lbPage.textContent = img.page;
-        lbDownload.href = `/api/images/${jobId}/${img.filename}`;
-        lbDownload.setAttribute('download', img.filename);
+        console.log('Opening lightbox for:', img.filename);
+        if (!img || !jobId) return;
 
-        // Show physical image details (Address / Folder Path)
+        // Reset image first to avoid flicker of previous image
+        lightboxImg.src = ''; 
+        lightboxImg.src = `/api/images/${jobId}/${img.filename}`;
+        
+        if (lbFilename) lbFilename.textContent = img.filename;
+        if (lbDims) lbDims.textContent = `${img.width || 0} x ${img.height || 0} px`;
+        if (lbSize) lbSize.textContent = formatBytes(parseInt(img.size) || 0);
+        if (lbFormat) lbFormat.textContent = img.format || 'N/A';
+        if (lbPage) lbPage.textContent = img.page || 'N/A';
+        
+        if (lbDownload) {
+            lbDownload.href = `/api/images/${jobId}/${img.filename}`;
+            lbDownload.setAttribute('download', img.filename);
+        }
+
         if (lbFilepath) {
             lbFilepath.textContent = `output/${img.filename}`;
         }
 
         lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
     }
 
     // --- Page Text Modal ---
@@ -304,13 +313,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Modal Close Handlers
-    closeBtn.addEventListener('click', () => lightbox.classList.remove('active'));
+    const closeAll = () => {
+        lightbox.classList.remove('active');
+        textModal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+    };
+
+    closeBtn.addEventListener('click', closeAll);
     lightbox.addEventListener('click', (e) => {
-        if (e.target === lightbox) lightbox.classList.remove('active');
+        if (e.target === lightbox) closeAll();
     });
 
-    closeTextModal.addEventListener('click', () => textModal.classList.remove('active'));
+    closeTextModal.addEventListener('click', closeAll);
     textModal.addEventListener('click', (e) => {
-        if (e.target === textModal) textModal.classList.remove('active');
+        if (e.target === textModal) closeAll();
     });
 });
