@@ -162,14 +162,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.className = 'tile-card';
                 item.dataset.xref = getXrefFromFilename(img.filename);
                 item.dataset.page = pageData.page;
+                
+                // Store the image data as a JSON string in a data attribute for delegation
+                item.dataset.imgData = JSON.stringify(img);
+                item.dataset.jobId = jobId;
 
-                // Smart Auto-Matching Heuristic:
-                // Primary tiles are usually large (> 350px). Faces/variants are smaller.
-                // Every time we see a large tile, we assume it's the start of a new product group.
+                // Smart Auto-Matching Heuristic
                 if (parseInt(img.width) > 350 || parseInt(img.height) > 350) {
                     currentProdIdx++;
                 }
-                if (currentProdIdx === -1) currentProdIdx = 0; // Fallback
+                if (currentProdIdx === -1) currentProdIdx = 0; 
                 
                 item.dataset.guessedProductIndex = currentProdIdx;
 
@@ -181,12 +183,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="dim">${img.width} x ${img.height} px</p>
                     </div>
                 `;
-                item.addEventListener('click', () => openLightbox(img, jobId, item));
                 grid.appendChild(item);
             });
 
             group.appendChild(grid);
             gallery.appendChild(group);
+        });
+
+        // Use Event Delegation for the gallery - much more robust
+        gallery.addEventListener('click', (e) => {
+            const card = e.target.closest('.tile-card');
+            if (card && card.dataset.imgData) {
+                try {
+                    const img = JSON.parse(card.dataset.imgData);
+                    const jobId = card.dataset.jobId;
+                    openLightbox(img, jobId, card);
+                } catch (err) { console.error('Delegation error:', err); }
+            }
         });
 
         // Wire up all Scan Text buttons
