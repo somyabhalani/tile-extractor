@@ -287,51 +287,39 @@ async def scan_text_for_page(job_id: str, page_num: int):
         # Coordinate Matching Engine
         tile_matches = {} # filename -> matched display text
         
-        # Identify all tiles for this page and sort them by xref (logical extraction order)
+        # Visual Flow Matching Engine (Logical order matching)
+        tile_matches = {} # filename -> matched display text
+        
+        # Identify all tiles for this page
         page_tiles = [row for row in rows if int(row.get("page", 0)) == page_num]
         
-        # Separate primary tiles (large) to help with order matching
+        # Identify primary tiles (large ones) which usually represent a new product entry
         primary_tiles = [t for t in page_tiles if float(t.get("width", 0)) > 350 or float(t.get("height", 0)) > 350]
-        if not primary_tiles: primary_tiles = page_tiles # fallback to all if none large
+        if not primary_tiles: primary_tiles = page_tiles 
 
-        for idx, row in enumerate(page_tiles):
-            matched_text = display_text # default to full text
+        for row in page_tiles:
+            matched_text = display_text # default fallback
             
-            try:
-                cx = float(row.get("center_x", 0))
-                cy = float(row.get("center_y", 0))
-                
-                # Layer 1: Mathematical Coordinate Distance (Highest Priority)
-                coord_products = [p for p in products if p.get("coordinates")]
-                if coord_products and cx > 0:
-                    best_dist = float('inf')
-                    for p in coord_products:
-                        dist = ((cx - p["coordinates"][0]) ** 2 + (cy - p["coordinates"][1]) ** 2) ** 0.5
-                        if dist < best_dist:
-                            best_dist = dist
-                            matched_text = p["display"]
-                
-                # Layer 2: Logical Order Heuristic (If coordinates failed or were missing)
-                elif products:
-                    # Find which primary tile group this tile belongs to
-                    # We assume tiles follow the logical order of products in the text
-                    # Identify index of the primary tile this tile corresponds to
-                    # (e.g. Nth product corresponds to Nth large image)
+            if products:
+                try:
+                    # HEURISTIC: Match by Logical Extraction Sequence
+                    # We determine which primary product group this specific tile belongs to
+                    # based on where it sits in the physical file list relative to the large tiles.
                     
-                    # Count how many large images appeared before this tile in the extraction sequence
-                    tile_order_idx = -1
+                    current_tile_idx = page_tiles.index(row)
+                    product_group_idx = -1
+                    
                     for pt in primary_tiles:
-                        if page_tiles.index(row) >= page_tiles.index(pt):
-                            tile_order_idx += 1
+                        if current_tile_idx >= page_tiles.index(pt):
+                            product_group_idx += 1
                         else: break
                     
-                    if tile_order_idx >= 0 and tile_order_idx < len(products):
-                        matched_text = products[tile_order_idx]["display"]
-                    elif products:
-                        matched_text = products[0]["display"]
-
-            except Exception as e:
-                print(f"WARN: Matching failed for {row['filename']}: {e}")
+                    if product_group_idx >= 0 and product_group_idx < len(products):
+                        matched_text = products[product_group_idx].get("display", display_text)
+                    elif len(products) == 1:
+                        matched_text = products[0].get("display", display_text)
+                except Exception as e:
+                    print(f"WARN: Flow matching failed for {row['filename']}: {e}")
             
             # Save specific text for this tile
             row["product_text"] = json.dumps({
