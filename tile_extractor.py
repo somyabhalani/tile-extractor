@@ -28,13 +28,22 @@ class TileCatalogueExtractor:
 
         for pno in range(total_pages):
             page = doc[pno]
-            images = page.get_images(full=True)
+            page_width = page.rect.width
+            page_height = page.rect.height
             
-            for img_info in images:
-                xref = img_info[0]
+            # Get images with bounding boxes
+            images_info = page.get_image_info(xrefs=True)
+            
+            for img_info in images_info:
+                xref = img_info["xref"]
                 if xref in seen_xrefs:
                     continue
                 seen_xrefs.add(xref)
+                
+                # Calculate center point in percentages (0-100)
+                bbox = img_info["bbox"] # (x0, y0, x1, y1)
+                center_x = ((bbox[0] + bbox[2]) / 2 / page_width) * 100
+                center_y = ((bbox[1] + bbox[3]) / 2 / page_height) * 100
                 
                 try:
                     base_image = doc.extract_image(xref)
@@ -62,7 +71,10 @@ class TileCatalogueExtractor:
                         "width": w,
                         "height": h,
                         "size": len(image_bytes),
-                        "format": ext.upper()
+                        "format": ext.upper(),
+                        "center_x": round(center_x, 2),
+                        "center_y": round(center_y, 2),
+                        "product_text": ""
                     })
                     self.stats["tiles_saved"] += 1
                     
@@ -79,7 +91,7 @@ class TileCatalogueExtractor:
     def _write_csv(self):
         csv_path = self.output_dir / "tiles.csv"
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["page", "filename", "width", "height", "size", "format"])
+            writer = csv.DictWriter(f, fieldnames=["page", "filename", "width", "height", "size", "format", "center_x", "center_y", "product_text"])
             writer.writeheader()
             writer.writerows(self._csv_rows)
 

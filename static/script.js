@@ -214,6 +214,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Store scanned text data (now the full page summary)
             scannedTextData[page] = data.full_text || "";
+            
+            // Store the precise coordinate-matched text for each tile
+            window.tileMatches = window.tileMatches || {};
+            if (data.tile_matches) {
+                Object.assign(window.tileMatches, data.tile_matches);
+            }
 
             // Update all tile cards on this page to show that text is available
             document.querySelectorAll(`.tile-card[data-page="${page}"]`).forEach(card => {
@@ -266,66 +272,28 @@ document.addEventListener('DOMContentLoaded', () => {
         lbDownload.setAttribute('download', img.filename);
 
         // Show individual product info in lightbox
-        const page = img.page;
-        const text = scannedTextData[page];
         const lbSelect = document.getElementById('lb-product-select');
+        
+        // Use the precise coordinate-matched text from the backend
+        const matchedText = window.tileMatches && window.tileMatches[img.filename];
 
-        if (text) {
-            // Check if it has structured headers or numbered fallback headers
-            const splitRegex = /\*\*Product \d+:|(?:\n|^)\d+\.\s+\*\*/;
-            if (splitRegex.test(text)) {
-                // Split and remove empty first elements
-                const chunks = text.split(splitRegex).filter(p => p.trim() !== "");
-                
-                if (chunks.length > 1) {
-                    // Multiple products found -> show dropdown
-                    lbSelect.innerHTML = '';
-                    lbSelect.style.display = 'block';
-                    
-                    const parsedProducts = [];
-                    chunks.forEach((chunk, index) => {
-                        const lines = chunk.trim().split('\n');
-                        const nameLine = lines[0].replace(/\*\*/g, '').trim(); // e.g., "ROCKSTONE NERO"
-                        
-                        // Try to find the position to help user match
-                        let position = "";
-                        const posMatch = chunk.match(/\* Position: (.*)/i);
-                        if (posMatch) position = ` (${posMatch[1]})`;
-
-                        const option = document.createElement('option');
-                        option.value = index;
-                        option.textContent = `${index + 1}: ${nameLine}${position}`;
-                        lbSelect.appendChild(option);
-                        
-                        parsedProducts.push(chunk.trim().replace(/\n/g, '<br>').replace(/\*\s/g, '• '));
-                    });
-
-                    // Update text when dropdown changes
-                    lbSelect.onchange = () => {
-                        lbProductText.innerHTML = parsedProducts[lbSelect.value];
-                    };
-                    
-                    // Trigger initial display based on smart auto-match heuristic
-                    let targetIdx = parseInt(cardEl.dataset.guessedProductIndex) || 0;
-                    if (targetIdx >= parsedProducts.length) targetIdx = parsedProducts.length - 1; // Safety bounds
-                    
-                    lbSelect.value = targetIdx;
-                    lbProductText.innerHTML = parsedProducts[targetIdx];
-
-                } else {
-                    // Only 1 product -> no dropdown needed
-                    lbSelect.style.display = 'none';
-                    lbProductText.innerHTML = chunks[0].trim().replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
-                }
-            } else {
-                // Fallback raw text mode -> just show everything
-                lbSelect.style.display = 'none';
-                lbProductText.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
-            }
+        if (matchedText) {
+            lbSelect.style.display = 'none';
+            lbProductText.innerHTML = matchedText.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
             lbProductWrap.style.display = 'flex';
         } else {
-            lbProductWrap.style.display = 'none';
-            lbSelect.style.display = 'none';
+            // Fallback if no specific match is found for this image (e.g. older scans)
+            const page = img.page;
+            const text = scannedTextData[page];
+            
+            if (text) {
+                lbSelect.style.display = 'none';
+                lbProductText.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\s/g, '• ');
+                lbProductWrap.style.display = 'flex';
+            } else {
+                lbProductWrap.style.display = 'none';
+                lbSelect.style.display = 'none';
+            }
         }
 
         lightbox.classList.add('active');

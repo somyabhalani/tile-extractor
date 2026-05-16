@@ -254,22 +254,60 @@ async def scan_text_for_page(job_id: str, page_num: int):
         if not display_text.strip():
             display_text = "No products detected on this page."
 
-        # Step 4: Store a combined JSON in the CSV so the downloader can get the list
-        save_data = json.dumps({"display": display_text, "products": products, "raw_text": raw_text})
-
-        # Step 5: Update CSV
+        # Step 4: Update CSV and perform Coordinate Matching
         rows = []
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             fieldnames = reader.fieldnames or []
             rows = list(reader)
 
-        if "product_text" not in fieldnames:
-            fieldnames = list(fieldnames) + ["product_text"]
-
+        # Coordinate Matching Engine
+        tile_matches = {} # filename -> matched display text
+        
+        # Only attempt coordinate matching if we have structured products with coordinates
+        can_coordinate_match = bool(products and all(isinstance(p.get("coordinates"), list) and len(p["coordinates"]) == 2 for p in products))
+        
         for row in rows:
             if int(row.get("page", 0)) == page_num:
-                row["product_text"] = save_data
+                matched_text = display_text # fallback to full text
+                
+                if can_coordinate_match:
+                    try:
+                        # Get exact tile physical center from CSV
+                        cx = float(row.get("center_x", 0))
+                        cy = float(row.get("center_y", 0))
+                        
+                        best_dist = float('inf')
+                        best_product = None
+                        best_idx = 0
+                        
+                        # Find closest AI product coordinate
+                        for i, p in enumerate(products, 1):
+                            ai_coords = p["coordinates"]
+                            dist = ((cx - ai_coords[0]) ** 2 + (cy - ai_coords[1]) ** 2) ** 0.5
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_product = p
+                                best_idx = i
+                                
+                        if best_product:
+                            # Build isolated display text for this specific matched tile
+                            name = best_product.get('name') or "N/A"
+                            collection = best_product.get('collection') or "N/A"
+                            matched_text = f"**{name}**\n* Collection: {collection}\n* Size: {best_product.get('size') or 'N/A'}\n* Finish: {best_product.get('surface') or 'N/A'}\n* Faces: {best_product.get('faces') or 'N/A'}\n* Thickness: {best_product.get('thickness') or 'N/A'}\n* Position: {best_product.get('position') or 'N/A'}\n* Description: {best_product.get('image_description') or 'N/A'}"
+                    except Exception as e:
+                        print(f"WARN: Coordinate match failed for {row['filename']}: {e}")
+                
+                # We save a specific JSON for this row, carrying its isolated matched text
+                row["product_text"] = json.dumps({
+                    "display": matched_text,
+                    "products": products, # keep full array for download
+                    "raw_text": raw_text
+                })
+                tile_matches[row["filename"]] = matched_text
+
+        if "product_text" not in fieldnames:
+            fieldnames = list(fieldnames) + ["product_text"]
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -279,7 +317,8 @@ async def scan_text_for_page(job_id: str, page_num: int):
         return {
             "page": page_num,
             "status": "success",
-            "full_text": display_text # Return pretty text for the screen
+            "full_text": display_text, # Return pretty text for the page modal
+            "tile_matches": tile_matches # Precise coordinate-matched text per tile
         }
 
     except Exception as e:

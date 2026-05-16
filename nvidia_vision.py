@@ -41,6 +41,7 @@ For each product return:
 - surface: finish type (e.g. "Matt", "Polished", "Glossy")
 - faces: number of faces as integer
 - position: where is the PRIMARY large tile on the page? (top-left / top-right / bottom-left / bottom-right / center / full-page)
+- coordinates: estimate the exact [center_x, center_y] coordinates of the PRIMARY large tile on the page as percentages from 0 to 100. (e.g. [25, 25] is top-left, [75, 75] is bottom-right).
 - image_description: briefly describe the tile appearance (color, texture, pattern) in 1 sentence
 
 Return ONLY valid JSON, no explanation, no markdown, no preamble:
@@ -56,6 +57,7 @@ Return ONLY valid JSON, no explanation, no markdown, no preamble:
       "surface": "",
       "faces": 0,
       "position": "",
+      "coordinates": [0, 0],
       "image_description": ""
     }
   ]
@@ -125,6 +127,7 @@ For each product write:
 - Surface/Finish
 - Number of Faces
 - Position on page
+- Coordinates (e.g., [25, 25] for top-left in percentages)
 - Brief description of the tile appearance
 
 Be direct and concise. List all products you can see."""
