@@ -30,8 +30,10 @@
             flex-wrap: wrap;
             gap: 1rem;
         }
-        .footer-main { font-size: 1.15rem; color: #1e293b; font-weight: 500; }
+        .footer-credit { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+        .footer-main { font-size: 1.15rem; color: #1e293b; font-weight: 500; margin: 0; }
         .footer-main strong { color: var(--primary); font-weight: 800; }
+        .footer-sub { font-size: 0.95rem; color: #475569; font-weight: 600; margin: 0; }
         .footer-links { display: flex; gap: 2rem; }
         .footer-links a { color: var(--text-color); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem; }
         .footer-links a:hover { color: var(--primary); }
@@ -111,7 +113,10 @@
 
         <footer class="site-footer">
             <div class="footer-top">
-                <p class="footer-main">Developed by <strong>Somya Bhalani</strong> @ <span class="brand-gold">Ananta Labs</span></p>
+                <div class="footer-credit">
+                    <p class="footer-main">Developed by <strong>Somya Bhalani</strong></p>
+                    <p class="footer-sub">Founder, <span class="brand-gold">Ananta Labs</span></p>
+                </div>
                 <div class="footer-links">
                     <a href="https://github.com/somyabhalani/tile-extractor" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a>
                     <a href="https://mail.google.com/mail/?view=cm&fs=1&to=work.anantalabs@gmail.com" target="_blank"><i class="fa-solid fa-envelope"></i> work.anantalabs@gmail.com</a>
