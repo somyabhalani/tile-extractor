@@ -165,18 +165,25 @@ async def download_page_assets(job_id: str, page_num: int):
         raise HTTPException(status_code=404, detail="No images found for this page.")
 
     # Build the JSON exactly like the model output
-    if isinstance(product_list, list):
+    if isinstance(product_list, list) and product_list:
         page_data = {
             "page_number": page_num,
             "products": product_list,
             "tiles": tiles
         }
-    else:
-        # Fallback: raw text from model when JSON parsing failed
+    elif isinstance(product_list, str) and product_list.strip():
+        # Fallback: raw text — split into clean lines so JSON is readable
+        clean_lines = [line.strip() for line in product_list.replace('\\n', '\n').replace('\\t', ' ').split('\n') if line.strip()]
         page_data = {
             "page_number": page_num,
             "products": [],
-            "raw_text": product_list,
+            "extracted_text": clean_lines,
+            "tiles": tiles
+        }
+    else:
+        page_data = {
+            "page_number": page_num,
+            "products": [],
             "tiles": tiles
         }
 
