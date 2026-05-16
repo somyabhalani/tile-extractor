@@ -161,25 +161,31 @@ async def download_page_assets(job_id: str, page_num: int):
     if not tiles:
         raise HTTPException(status_code=404, detail="No images found for this page.")
 
-    # Properly aligned JSON structure
+    # Build the JSON exactly like the model output
+    # product_list is already a list of product dicts from the AI
     page_data = {
         "page_number": page_num,
-        "product_info": product_list,
+        "products": product_list if isinstance(product_list, list) else [],
         "tiles": tiles
     }
+
+    # If it was a fallback plain-text scan, include that too
+    if isinstance(product_list, str) and product_list:
+        page_data["products"] = []
+        page_data["raw_text"] = product_list
 
     # Create a temporary ZIP file specifically for this page
     zip_filename = f"page_{page_num}_{job_id}.zip"
     zip_path = job_dir / zip_filename
-    
+
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Add images
         for tile in tiles:
             file_path = output_dir / tile["filename"]
             zipf.write(file_path, arcname=tile["filename"])
-            
-        # Add page_data.json
-        json_data = json.dumps(page_data, indent=4)
+
+        # Add page_data.json — exact model output format
+        json_data = json.dumps(page_data, indent=4, ensure_ascii=False)
         zipf.writestr("page_data.json", json_data)
 
     return FileResponse(zip_path, filename=f"page_{page_num}_tiles.zip")
