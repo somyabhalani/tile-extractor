@@ -156,11 +156,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const grid = document.createElement('div');
             grid.className = 'masonry-grid';
 
+            let currentProdIdx = -1;
+
             pageData.images.forEach(img => {
                 const item = document.createElement('div');
                 item.className = 'tile-card';
                 item.dataset.xref = getXrefFromFilename(img.filename);
                 item.dataset.page = pageData.page;
+
+                // Smart Auto-Matching Heuristic:
+                // Primary tiles are usually large (> 350px). Faces/variants are smaller.
+                // Every time we see a large tile, we assume it's the start of a new product group.
+                if (parseInt(img.width) > 350 || parseInt(img.height) > 350) {
+                    currentProdIdx++;
+                }
+                if (currentProdIdx === -1) currentProdIdx = 0; // Fallback
+                
+                item.dataset.guessedProductIndex = currentProdIdx;
 
                 const imgSrc = `/api/images/${jobId}/${img.filename}`;
                 item.innerHTML = `
@@ -291,9 +303,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         lbProductText.innerHTML = parsedProducts[lbSelect.value];
                     };
                     
-                    // Trigger initial display
-                    lbSelect.value = 0;
-                    lbProductText.innerHTML = parsedProducts[0];
+                    // Trigger initial display based on smart auto-match heuristic
+                    let targetIdx = parseInt(cardEl.dataset.guessedProductIndex) || 0;
+                    if (targetIdx >= parsedProducts.length) targetIdx = parsedProducts.length - 1; // Safety bounds
+                    
+                    lbSelect.value = targetIdx;
+                    lbProductText.innerHTML = parsedProducts[targetIdx];
 
                 } else {
                     // Only 1 product -> no dropdown needed
