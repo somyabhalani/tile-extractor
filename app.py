@@ -236,25 +236,28 @@ async def scan_text_for_page(job_id: str, page_num: int):
             # Fallback mode: parse the raw text to extract products and coordinates
             display_text = raw_text
             
-            # Use regex to split into blocks and find coordinates
-            blocks = re.split(r'(?:\n|^)\d+\.\s+\*\*', raw_text)
+            # Split by numbered list or product headers
+            blocks = re.split(r'(?:\n|^)(?:\d+\.|\*)\s*\*\*', raw_text)
             for block in blocks:
-                if not block.strip(): continue
+                if not block.strip() or len(block) < 20: continue
                 
+                # Extract Name
                 name_match = re.search(r'^(.*?)\*\*', block)
                 name = name_match.group(1).strip() if name_match else "N/A"
                 
-                coord_match = re.search(r'Coordinates:.*?\[(\d+),\s*(\d+)\]', block)
+                # Extract Coordinates
+                coord_match = re.search(r'(?:Coordinates|Position).*?\[?(\d+)[\s,]+(\d+)\]?', block, re.I)
+                coords = None
                 if coord_match:
                     try:
-                        cx = int(coord_match.group(1))
-                        cy = int(coord_match.group(2))
-                        products.append({
-                            "name": name,
-                            "coordinates": [cx, cy],
-                            "display": block.strip()
-                        })
+                        coords = [int(coord_match.group(1)), int(coord_match.group(2))]
                     except: pass
+                
+                products.append({
+                    "name": name,
+                    "coordinates": coords,
+                    "display": block.strip()
+                })
         else:
             # Structured mode: build pretty display from product list
             for i, p in enumerate(products, 1):
@@ -268,7 +271,7 @@ async def scan_text_for_page(job_id: str, page_num: int):
                 text_block += f"* Position: {p.get('position') or 'N/A'}\n"
                 text_block += f"* Description: {p.get('image_description') or 'N/A'}"
                 
-                p["display"] = text_block # Store isolated text for later matching
+                p["display"] = text_block
                 display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
 
         if not display_text.strip():
@@ -284,44 +287,59 @@ async def scan_text_for_page(job_id: str, page_num: int):
         # Coordinate Matching Engine
         tile_matches = {} # filename -> matched display text
         
-        # Only attempt coordinate matching if we have structured products with coordinates
-        can_coordinate_match = bool(products and all(isinstance(p.get("coordinates"), list) and len(p["coordinates"]) == 2 for p in products))
+        # Identify all tiles for this page and sort them by xref (logical extraction order)
+        page_tiles = [row for row in rows if int(row.get("page", 0)) == page_num]
         
-        for row in rows:
-            if int(row.get("page", 0)) == page_num:
-                matched_text = display_text # fallback to full text
+        # Separate primary tiles (large) to help with order matching
+        primary_tiles = [t for t in page_tiles if float(t.get("width", 0)) > 350 or float(t.get("height", 0)) > 350]
+        if not primary_tiles: primary_tiles = page_tiles # fallback to all if none large
+
+        for idx, row in enumerate(page_tiles):
+            matched_text = display_text # default to full text
+            
+            try:
+                cx = float(row.get("center_x", 0))
+                cy = float(row.get("center_y", 0))
                 
-                if can_coordinate_match:
-                    try:
-                        # Get exact tile physical center from CSV
-                        cx = float(row.get("center_x", 0))
-                        cy = float(row.get("center_y", 0))
-                        
-                        best_dist = float('inf')
-                        best_product = None
-                        best_idx = 0
-                        
-                        # Find closest AI product coordinate
-                        for i, p in enumerate(products, 1):
-                            ai_coords = p["coordinates"]
-                            dist = ((cx - ai_coords[0]) ** 2 + (cy - ai_coords[1]) ** 2) ** 0.5
-                            if dist < best_dist:
-                                best_dist = dist
-                                best_product = p
-                                best_idx = i
-                                
-                        if best_product:
-                            matched_text = best_product.get("display") or display_text
-                    except Exception as e:
-                        print(f"WARN: Coordinate match failed for {row['filename']}: {e}")
+                # Layer 1: Mathematical Coordinate Distance (Highest Priority)
+                coord_products = [p for p in products if p.get("coordinates")]
+                if coord_products and cx > 0:
+                    best_dist = float('inf')
+                    for p in coord_products:
+                        dist = ((cx - p["coordinates"][0]) ** 2 + (cy - p["coordinates"][1]) ** 2) ** 0.5
+                        if dist < best_dist:
+                            best_dist = dist
+                            matched_text = p["display"]
                 
-                # We save a specific JSON for this row, carrying its isolated matched text
-                row["product_text"] = json.dumps({
-                    "display": matched_text,
-                    "products": products, # keep full array for download
-                    "raw_text": raw_text
-                })
-                tile_matches[row["filename"]] = matched_text
+                # Layer 2: Logical Order Heuristic (If coordinates failed or were missing)
+                elif products:
+                    # Find which primary tile group this tile belongs to
+                    # We assume tiles follow the logical order of products in the text
+                    # Identify index of the primary tile this tile corresponds to
+                    # (e.g. Nth product corresponds to Nth large image)
+                    
+                    # Count how many large images appeared before this tile in the extraction sequence
+                    tile_order_idx = -1
+                    for pt in primary_tiles:
+                        if page_tiles.index(row) >= page_tiles.index(pt):
+                            tile_order_idx += 1
+                        else: break
+                    
+                    if tile_order_idx >= 0 and tile_order_idx < len(products):
+                        matched_text = products[tile_order_idx]["display"]
+                    elif products:
+                        matched_text = products[0]["display"]
+
+            except Exception as e:
+                print(f"WARN: Matching failed for {row['filename']}: {e}")
+            
+            # Save specific text for this tile
+            row["product_text"] = json.dumps({
+                "display": matched_text,
+                "products": products,
+                "raw_text": raw_text
+            })
+            tile_matches[row["filename"]] = matched_text
 
         if "product_text" not in fieldnames:
             fieldnames = list(fieldnames) + ["product_text"]
