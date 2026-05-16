@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use & Features - Tile Extractor</title>
+    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .content-card { max-width: 900px; margin: 4rem auto; padding: 3rem; line-height: 1.8; }
+        h1 { color: var(--primary); margin-bottom: 2rem; }
+        h2 { margin-top: 3rem; color: var(--text-color); border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; }
+        .step { margin: 2rem 0; display: flex; gap: 1.5rem; }
+        .step-num { background: var(--primary); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .back-link { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--primary); text-decoration: none; margin-bottom: 2rem; font-weight: 600; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .feature-item { background: rgba(255,255,255,0.4); padding: 1.5rem; border-radius: 15px; border: 1px solid var(--glass-border); }
+        .feature-item i { color: var(--primary); font-size: 1.5rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="marble-background"></div>
+    <div class="container">
+        <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Tool</a>
+        <div class="glass-panel content-card">
+            <h1>User Guide & Features</h1>
+            
+            <section id="how-to-use">
+                <h2>How to Use</h2>
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div>
+                        <h3>Upload Catalogue</h3>
+                        <p>Drag and drop your PDF catalogue into the upload zone or click to select the file. For best results, use high-resolution PDF files.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div>
+                        <h3>Automatic Extraction</h3>
+                        <p>The system will automatically scan each page and extract every tile image into a clean, lossless format. You can monitor the progress bar in real-time.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div>
+                        <h3>Scan Text Data</h3>
+                        <p>Click the <strong>"Scan Text"</strong> button on any page. Our Vision AI will identify products and match them to the extracted tiles using a visual flow heuristic.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div>
+                        <h3>Inspect & Download</h3>
+                        <p>Click any tile to see its technical metadata (size, path, page). You can download individual tiles or the entire processed package as a ZIP.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="features">
+                <h2>Key Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <i class="fa-solid fa-gem"></i>
+                        <h3>Lossless Quality</h3>
+                        <p>Extracts images directly from the PDF data structures to ensure zero quality loss compared to the original.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-brain"></i>
+                        <h3>Vision AI Match</h3>
+                        <p>Uses advanced NVIDIA Vision AI to read spec blocks and pair text with specific tile images automatically.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-microscope"></i>
+                        <h3>Metadata Insight</h3>
+                        <p>Provides deep technical insights into every image, including physical dimensions, memory size, and page origin.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-bolt"></i>
+                        <h3>Instant ZIP Export</h3>
+                        <p>Package thousands of extracted tiles into a single organized ZIP file with one click.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>
