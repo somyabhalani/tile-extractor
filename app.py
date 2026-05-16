@@ -25,6 +25,7 @@ JOBS_DIR = Path("jobs")
 JOBS_DIR.mkdir(exist_ok=True)
 
 PROGRESS_STATE = {}
+SCAN_STATE = {} # { job_id: { page_num: { status: "pending", result: None } } }
 
 def run_extraction_task(job_id: str, pdf_path: str, output_dir: str):
     print(f"INFO: Starting extraction for job {job_id}")
@@ -204,149 +205,116 @@ async def download_page_assets(job_id: str, page_num: int):
 
     return FileResponse(zip_path, filename=f"page_{page_num}_tiles.zip")
 
-@app.post("/api/scan-text/{job_id}/{page_num}")
-async def scan_text_for_page(job_id: str, page_num: int):
-    """Scan the entire page as one image and extract all product details using 90B model."""
-    job_dir = JOBS_DIR / job_id
-    csv_path = job_dir / "output" / "tiles.csv"
-
-    if not csv_path.exists():
-        raise HTTPException(status_code=404, detail="Job results not found.")
-
-    pdf_files = list(job_dir.glob("*.pdf"))
-    if not pdf_files:
-        raise HTTPException(status_code=404, detail="PDF not found.")
-    pdf_path = str(pdf_files[0])
-
+def run_scan_task(job_id: str, page_num: int, pdf_path: str, output_dir: str, csv_path: str):
+    """Background task for scanning text."""
     try:
-        extractor = TileCatalogueExtractor(pdf_path=pdf_path, output_dir=str(job_dir / "output"))
+        SCAN_STATE.setdefault(job_id, {})[page_num] = {"status": "scanning"}
         
-        # Step 1: Render FULL page at high-res (3x zoom)
+        extractor = TileCatalogueExtractor(pdf_path=pdf_path, output_dir=output_dir)
+        
+        # Step 1: Render FULL page at high-res
         image_b64 = extractor.get_full_page_image(page_num)
 
-        # Step 2: Use AI to extract all products from the page as a structured list
+        # Step 2: AI Extraction
         result_dict = scan_full_page_products(image_b64)
         products = result_dict.get("products", [])
         raw_text = result_dict.get("raw_text", "")
 
-        # Step 3: Build the display text
+        # Step 3: Build display text
         display_text = ""
-
         if raw_text and not products:
-            # Fallback mode: parse the raw text to extract products and coordinates
             display_text = raw_text
-            
-            # Split by numbered list or product headers
             blocks = re.split(r'(?:\n|^)(?:\d+\.|\*)\s*\*\*', raw_text)
             for block in blocks:
                 if not block.strip() or len(block) < 20: continue
-                
-                # Extract Name
                 name_match = re.search(r'^(.*?)\*\*', block)
                 name = name_match.group(1).strip() if name_match else "N/A"
-                
-                # Extract Coordinates
-                coord_match = re.search(r'(?:Coordinates|Position).*?\[?(\d+)[\s,]+(\d+)\]?', block, re.I)
-                coords = None
-                if coord_match:
-                    try:
-                        coords = [int(coord_match.group(1)), int(coord_match.group(2))]
-                    except: pass
-                
-                products.append({
-                    "name": name,
-                    "coordinates": coords,
-                    "display": block.strip()
-                })
+                products.append({"name": name, "display": block.strip()})
         else:
-            # Structured mode: build pretty display from product list
             for i, p in enumerate(products, 1):
                 name = p.get('name') or "N/A"
-                collection = p.get('collection') or "N/A"
-                text_block = f"**{name}**\n* Collection: {collection}\n"
+                text_block = f"**{name}**\n* Collection: {p.get('collection') or 'N/A'}\n"
                 text_block += f"* Size: {p.get('size') or 'N/A'}\n"
                 text_block += f"* Finish: {p.get('surface') or 'N/A'}\n"
                 text_block += f"* Faces: {p.get('faces') or 'N/A'}\n"
                 text_block += f"* Thickness: {p.get('thickness') or 'N/A'}\n"
                 text_block += f"* Position: {p.get('position') or 'N/A'}\n"
                 text_block += f"* Description: {p.get('image_description') or 'N/A'}"
-                
                 p["display"] = text_block
                 display_text += f"**Product {i}: {name}**\n{text_block}\n\n"
 
         if not display_text.strip():
             display_text = "No products detected on this page."
 
-        # Step 4: Update CSV and perform Coordinate Matching
+        # Step 4: Update CSV
         rows = []
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            fieldnames = reader.fieldnames or []
+            fieldnames = list(reader.fieldnames or [])
             rows = list(reader)
 
-        # Coordinate Matching Engine
-        tile_matches = {} # filename -> matched display text
-        
-        # Visual Flow Matching Engine (Logical order matching)
-        tile_matches = {} # filename -> matched display text
-        
-        # Identify all tiles for this page
+        if "product_text" not in fieldnames:
+            fieldnames.append("product_text")
+
+        tile_matches = {}
         page_tiles = [row for row in rows if int(row.get("page", 0)) == page_num]
-        
-        # Identify primary tiles (large ones) which usually represent a new product entry
         primary_tiles = [t for t in page_tiles if float(t.get("width", 0)) > 350 or float(t.get("height", 0)) > 350]
         if not primary_tiles: primary_tiles = page_tiles 
 
         for row in page_tiles:
-            matched_text = display_text # default fallback
-            
+            matched_text = display_text
             if products:
                 try:
-                    # HEURISTIC: Match by Logical Extraction Sequence
-                    # We determine which primary product group this specific tile belongs to
-                    # based on where it sits in the physical file list relative to the large tiles.
-                    
                     current_tile_idx = page_tiles.index(row)
                     product_group_idx = -1
-                    
                     for pt in primary_tiles:
                         if current_tile_idx >= page_tiles.index(pt):
                             product_group_idx += 1
                         else: break
-                    
                     if product_group_idx >= 0 and product_group_idx < len(products):
                         matched_text = products[product_group_idx].get("display", display_text)
                     elif len(products) == 1:
                         matched_text = products[0].get("display", display_text)
-                except Exception as e:
-                    print(f"WARN: Flow matching failed for {row['filename']}: {e}")
+                except: pass
             
-            # Save specific text for this tile
-            row["product_text"] = json.dumps({
-                "display": matched_text,
-                "products": products,
-                "raw_text": raw_text
-            })
+            row["product_text"] = json.dumps({"display": matched_text, "products": products, "raw_text": raw_text})
             tile_matches[row["filename"]] = matched_text
-
-        if "product_text" not in fieldnames:
-            fieldnames = list(fieldnames) + ["product_text"]
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
 
-        return {
-            "page": page_num,
-            "status": "success",
-            "full_text": display_text, # Return pretty text for the page modal
-            "tile_matches": tile_matches # Precise coordinate-matched text per tile
+        SCAN_STATE[job_id][page_num] = {
+            "status": "completed",
+            "result": {
+                "page": page_num,
+                "full_text": display_text,
+                "tile_matches": tile_matches
+            }
         }
-
     except Exception as e:
-        print(f"ERROR: scan-text failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"ERROR: Scan job {job_id} p{page_num} failed: {e}")
+        SCAN_STATE[job_id][page_num] = {"status": "error", "error": str(e)}
+
+@app.post("/api/scan-text/{job_id}/{page_num}")
+async def scan_text_for_page(job_id: str, page_num: int, background_tasks: BackgroundTasks):
+    """Start background scan."""
+    job_dir = JOBS_DIR / job_id
+    csv_path = job_dir / "output" / "tiles.csv"
+    if not csv_path.exists(): raise HTTPException(status_code=404, detail="Job results not found.")
+    
+    pdf_files = list(job_dir.glob("*.pdf"))
+    if not pdf_files: raise HTTPException(status_code=404, detail="PDF not found.")
+    
+    background_tasks.add_task(run_scan_task, job_id, page_num, str(pdf_files[0]), str(job_dir / "output"), str(csv_path))
+    return {"status": "started", "message": "Scan background task initiated."}
+
+@app.get("/api/scan-status/{job_id}/{page_num}")
+async def get_scan_status(job_id: str, page_num: int):
+    """Poll for scan results."""
+    job_scans = SCAN_STATE.get(job_id, {})
+    return job_scans.get(page_num, {"status": "not_found"})
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

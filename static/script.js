@@ -214,56 +214,70 @@ document.addEventListener('DOMContentLoaded', () => {
         const jobId = btn.dataset.job;
 
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initializing...';
 
         try {
-            const response = await fetch(`/api/scan-text/${jobId}/${page}`, { method: 'POST' });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Scan failed');
-            }
-            const data = await response.json();
-
-            // Store scanned text data (now the full page summary)
-            scannedTextData[page] = data.full_text || "";
+            const startResponse = await fetch(`/api/scan-text/${jobId}/${page}`, { method: 'POST' });
+            if (!startResponse.ok) throw new Error('Failed to start scan');
             
-            // Store the precise coordinate-matched text for each tile
-            window.tileMatches = window.tileMatches || {};
-            if (data.tile_matches) {
-                Object.assign(window.tileMatches, data.tile_matches);
-            }
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI Scanning...';
 
-            // Update all tile cards on this page to show that text is available
-            document.querySelectorAll(`.tile-card[data-page="${page}"]`).forEach(card => {
-                const overlay = card.querySelector('.tile-overlay');
-                if (overlay && !overlay.querySelector('.tile-text-tag')) {
-                    overlay.innerHTML += `<p class="tile-text-tag"><i class="fa-solid fa-tag"></i> Details Extracted</p>`;
+            // Polling for scan results
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(`/api/scan-status/${jobId}/${page}`);
+                    const statusData = await statusResponse.json();
+
+                    if (statusData.status === 'completed') {
+                        clearInterval(pollInterval);
+                        const data = statusData.result;
+                        
+                        // Store scanned text data
+                        scannedTextData[page] = data.full_text || "";
+                        
+                        // Store precise matched text
+                        window.tileMatches = window.tileMatches || {};
+                        if (data.tile_matches) Object.assign(window.tileMatches, data.tile_matches);
+
+                        // Update tile cards
+                        document.querySelectorAll(`.tile-card[data-page="${page}"]`).forEach(card => {
+                            const overlay = card.querySelector('.tile-overlay');
+                            if (overlay && !overlay.querySelector('.tile-text-tag')) {
+                                overlay.innerHTML += `<p class="tile-text-tag"><i class="fa-solid fa-tag"></i> Details Extracted</p>`;
+                            }
+                        });
+
+                        btn.innerHTML = '<i class="fa-solid fa-check"></i> Scanned';
+                        btn.classList.add('btn-scan-done');
+
+                        // Add buttons
+                        const actionsContainer = document.getElementById(`page-actions-${page}`);
+                        if (actionsContainer && !document.getElementById(`btn-text-info-${page}`)) {
+                            const infoBtn = document.createElement('button');
+                            infoBtn.id = `btn-text-info-${page}`;
+                            infoBtn.className = 'btn-text-info';
+                            infoBtn.innerHTML = '<i class="fa-solid fa-list"></i> Page Text Info';
+                            infoBtn.addEventListener('click', () => openPageTextModal(page));
+                            actionsContainer.appendChild(infoBtn);
+                        }
+                        if (actionsContainer && !document.getElementById(`btn-download-page-${page}`)) {
+                            const downloadBtn = document.createElement('a');
+                            downloadBtn.id = `btn-download-page-${page}`;
+                            downloadBtn.className = 'btn-download-page';
+                            downloadBtn.href = `/api/download-page/${jobId}/${page}`;
+                            downloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> JSON & Images';
+                            actionsContainer.appendChild(downloadBtn);
+                        }
+                    } else if (statusData.status === 'error') {
+                        clearInterval(pollInterval);
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Retry';
+                        alert('Scan Error: ' + statusData.error);
+                    }
+                } catch (pollErr) {
+                    console.error('Scan polling error:', pollErr);
                 }
-            });
-
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Scanned';
-            btn.classList.add('btn-scan-done');
-
-            // Add "Text Info" button
-            const actionsContainer = document.getElementById(`page-actions-${page}`);
-            if (actionsContainer && !document.getElementById(`btn-text-info-${page}`)) {
-                const infoBtn = document.createElement('button');
-                infoBtn.id = `btn-text-info-${page}`;
-                infoBtn.className = 'btn-text-info';
-                infoBtn.innerHTML = '<i class="fa-solid fa-list"></i> Page Text Info';
-                infoBtn.addEventListener('click', () => openPageTextModal(page));
-                actionsContainer.appendChild(infoBtn);
-            }
-
-            // Add "Download Page Data" button
-            if (actionsContainer && !document.getElementById(`btn-download-page-${page}`)) {
-                const downloadBtn = document.createElement('a');
-                downloadBtn.id = `btn-download-page-${page}`;
-                downloadBtn.className = 'btn-download-page';
-                downloadBtn.href = `/api/download-page/${jobId}/${page}`;
-                downloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> JSON & Images';
-                actionsContainer.appendChild(downloadBtn);
-            }
+            }, 2000);
 
         } catch (err) {
             btn.disabled = false;
