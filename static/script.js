@@ -271,9 +271,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const lbSelect = document.getElementById('lb-product-select');
 
         if (text) {
-            // Check if it has structured **Product X:** headers
-            if (text.includes('**Product ')) {
-                const chunks = text.split(/\*\*Product \d+:/).filter(p => p.trim() !== "");
+            // Check if it has structured headers or numbered fallback headers
+            const splitRegex = /\*\*Product \d+:|(?:\n|^)\d+\.\s+\*\*/;
+            if (splitRegex.test(text)) {
+                // Split and remove empty first elements
+                const chunks = text.split(splitRegex).filter(p => p.trim() !== "");
                 
                 if (chunks.length > 1) {
                     // Multiple products found -> show dropdown
