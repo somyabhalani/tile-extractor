@@ -1,12 +1,28 @@
-name: Keep Render Alive
+name: Save Traffic Stats
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # every 10 minutes
+    - cron: "0 0 * * *" # Runs automatically every single day at midnight UTC
+  workflow_dispatch: # Allows you to trigger this manually anytime from the Actions tab
 
 jobs:
-  ping:
+  backup-traffic:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Ping Render
-        run: curl -s https://your-app.onrender.com > /dev/null && echo "✅ Site is alive"
+      - name: Checkout Traffic Branch
+        uses: actions/checkout@v6 # Updated to support Node.js 24
+        with:
+          ref: 'traffic' # Pulls down your traffic branch
+
+      - name: Fetch Repository Traffic Data
+        uses: sangonzal/repository-traffic-action@v.0.1.6 # Corrected punctuation tag
+        env:
+          TRAFFIC_ACTION_TOKEN: ${{ secrets.TRAFFIC_ACTION_TOKEN }}
+
+      - name: Commit and Push Data
+        uses: EndBug/add-and-commit@v10 # Updated to support Node.js 24
+        with:
+          author_name: GitHub Action
+          author_email: actions@github.com
+          message: "Automated traffic data update"
